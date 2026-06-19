@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 
 export default defineConfig({
-  base: '/ultron/',
+  base: '/Ultron/',
   plugins: [react()],
   server: {
     port: process.env.PORT ? parseInt(process.env.PORT) : 5174,

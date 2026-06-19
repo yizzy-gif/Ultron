@@ -1,0 +1,335 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Ultron — sectioned feed (Live / Working / Done).
+   One scrolling page whose content depends on the active section:
+     · live    — cases that need attention (the entry feed)
+     · working — cases Ultron is actively working (in-progress / monitoring)
+     · done    — terminal cases (resolved / auto-resolved / unresolved / workflow)
+   The Ultron identity card heads every section; the cases below are laid out as
+   a vertical accordion (one card open at a time). DEMO ONLY — state lives in the
+   shared store hook.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+import { useEffect, useRef, useState } from 'react';
+import styled from 'styled-components';
+import type { ThreadItem, ThreadStatus } from './types';
+import { SEVERITY_RANK, isPurpleRow } from './ultronShared';
+import { UltronCard, UltronActionCard, UltronAnalyzingCard, UltronActivityCards } from './UltronCard';
+
+/** Which lifecycle bucket the page is showing. Mirrors the sidebar groups.
+ *  `new`  — needs-attention cases, paged one per page (the New group).
+ *  `live` — needs-attention cases as a single scrolling feed (legacy). */
+export type UltronSection = 'new' | 'live' | 'working' | 'done';
+
+const SECTION_STATUSES: Record<UltronSection, ThreadStatus[]> = {
+  new:     ['analyzing', 'needs_approval', 'recommended'],
+  live:    ['analyzing', 'needs_approval', 'recommended'],
+  working: ['in_progress', 'monitoring'],
+  done:    ['resolved', 'auto_resolved', 'workflow_available', 'unresolved'],
+};
+
+const EMPTY_COPY: Record<UltronSection, string> = {
+  new:     'Nothing new needs your attention right now.',
+  live:    'Nothing needs your attention right now.',
+  working: 'Ultron isn’t actively working anything right now.',
+  done:    'No completed cases yet.',
+};
+
+/** Sections paged one case at a time (a single card per page). */
+const PAGED_SECTIONS: UltronSection[] = ['new', 'working', 'done'];
+
+interface UltronPageProps {
+  /** Full thread list from the store (current state per thread). */
+  threads: ThreadItem[];
+  /** Decision stage per thread id (0 = first CTA, 1 = follow-up CTA). */
+  stageById: Record<string, number>;
+  /** Active section — Live, Working, or Done. */
+  section: UltronSection;
+  /** Ids whose analysis finished — keep an "Analyzed" summary card on the page. */
+  analyzedIds: string[];
+  /** Thread the sidebar has selected — expanded + scrolled into view. */
+  selectedId: string | null;
+  /** DEMO ONLY — advance an analyzing case to Needs approval. */
+  onDecide: (threadId: string) => void;
+  onAction: (threadId: string, label: string) => void;
+  onRefinement: (label: string) => void;
+  onSaveWorkflow: (thread: ThreadItem) => void;
+}
+
+export function UltronPage({
+  threads, stageById, section, analyzedIds, selectedId, onDecide, onAction, onRefinement, onSaveWorkflow,
+}: UltronPageProps) {
+  const bySeverity = (a: { t: ThreadItem; index: number }, b: { t: ThreadItem; index: number }) =>
+    // Needs-attention cases float above still-analyzing ones, then severity, then recency.
+    ((a.t.status === 'analyzing' ? 1 : 0) - (b.t.status === 'analyzing' ? 1 : 0)) ||
+    (SEVERITY_RANK[a.t.severity] - SEVERITY_RANK[b.t.severity]) || (a.index - b.index);
+
+  // Cases shown in the active section. Each case appears in exactly one section
+  // — the one its current status maps to — so a single card travels Needs
+  // attention → Working → Done as the user acts on it (no lingering copies).
+  const ids = threads
+    .map((t, index) => ({ t, index }))
+    .filter(({ t }) => SECTION_STATUSES[section].includes(t.status))
+    .sort(bySeverity)
+    .map(({ t }) => t.id);
+
+  // Accordion: at most one card open at a time, defaulting to the selected case.
+  const [expandedId, setExpandedId] = useState<string | null>(() => selectedId ?? null);
+  // Cases whose docked decision surface the user has dismissed.
+  const [dismissedDockIds, setDismissedDockIds] = useState<string[]>([]);
+
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  // The last selection we scrolled to. Seeded on first run with the initial
+  // selection so the feed opens at the top (the Ultron identity card — the
+  // entry point) instead of jumping to the default case. Comparing values
+  // (rather than a mount flag) also makes this safe under StrictMode's
+  // double-invoked effects.
+  const lastScrolledId = useRef<string | null | undefined>(undefined);
+
+  // Selecting a case in the sidebar expands it (collapsing any other) and
+  // scrolls it into view within the section.
+  useEffect(() => {
+    if (lastScrolledId.current === undefined) { lastScrolledId.current = selectedId; return; }
+    if (!selectedId || selectedId === lastScrolledId.current) return;
+    lastScrolledId.current = selectedId;
+    setExpandedId(selectedId);
+    cardRefs.current[selectedId]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [selectedId]);
+
+  // New and Done are paged one case at a time: the page shows a single event,
+  // and the pager steps to the previous/next case. The current case is the
+  // sidebar selection when it's in the section, otherwise the first one.
+  const paged = PAGED_SECTIONS.includes(section);
+  const pagedCurrentId = paged
+    ? (selectedId && ids.includes(selectedId) ? selectedId : ids[0] ?? null)
+    : null;
+
+  // On a paged page, the decision surface (prompt + buttons) is detached from
+  // the event card and docked at the page bottom. Only cases that actually need
+  // a decision (or can be saved as a workflow) get a dock.
+  const pagedThread = pagedCurrentId ? threads.find(t => t.id === pagedCurrentId) ?? null : null;
+  const dockEligible = !!pagedThread &&
+    (['needs_approval', 'recommended', 'unresolved'].includes(pagedThread.status) || isPurpleRow(pagedThread));
+  // The dock can be dismissed per case; once dismissed the prompt card is gone
+  // but the event card stays in its docked (collapsed) treatment — the actions
+  // don't pop back inline.
+  const dockThread = dockEligible && pagedThread && !dismissedDockIds.includes(pagedThread.id)
+    ? pagedThread : null;
+  // When the decision is docked and the event card has no body of its own, the
+  // card collapses to a compact summary (title + recommendation, flat tonal bg,
+  // no border). Resolved/settled cases stay expanded to show their outcome.
+  const eventExpanded = !(dockEligible && pagedThread &&
+    ['needs_approval', 'recommended', 'unresolved'].includes(pagedThread.status));
+
+  return (
+    <Page>
+      <Scroll>
+      {/* The Ultron identity now lives at the top of the secondary nav (see
+          App's menuHeader); the feed scrolls cases directly. */}
+      {paged ? (
+        <Feed>
+          {pagedCurrentId === null ? (
+            <Empty role="status">{EMPTY_COPY[section]}</Empty>
+          ) : (() => {
+            const thread = threads.find(t => t.id === pagedCurrentId);
+            if (!thread) return null;
+            // One event per page: the single case is always open (no accordion).
+            // Navigation between cases is the sidebar group — no pager.
+            // While analyzing, the thinking block is lifted out of the event card
+            // into its own card directly below (the feed gap sets the spacing),
+            // leaving the event card as a compact collapsed summary.
+            const analyzing = thread.status === 'analyzing';
+            // Once analysis finishes (analyzing → Needs approval) the same card
+            // stays, switched to a completed "Analyzed" summary.
+            const analyzed = !analyzing && analyzedIds.includes(thread.id);
+            // Resolved cases lift their activity trail out of the event card into
+            // individual per-step cards (8px gaps) placed directly below it.
+            const resolved = thread.status === 'resolved' || thread.status === 'auto_resolved';
+            // Working cases lift their live execution activities out into
+            // per-activity cards below, accumulating as Ultron works.
+            const executing = thread.status === 'in_progress';
+            // Cases awaiting a decision have already been reasoned through — show
+            // that completed thinking as an activity trail below the event card
+            // (the pending question lives in the docked decision surface).
+            const awaitingDecision = thread.status === 'needs_approval' || thread.status === 'recommended';
+            return (
+              <>
+                {/* The event card pins to the top of the scroll area; the
+                    activity cards below scroll underneath it. */}
+                <StickyEvent>
+                  <UltronCard
+                    key={thread.id}
+                    thread={thread}
+                    stage={stageById[thread.id] ?? 0}
+                    expanded={analyzing || executing ? false : eventExpanded}
+                    detachActionable={dockEligible}
+                    detachAnalyzing={analyzing}
+                    detachTrail={resolved}
+                    onToggle={() => {}}
+                    onDecide={onDecide}
+                    onAction={onAction}
+                    onRefinement={onRefinement}
+                    onSaveWorkflow={onSaveWorkflow}
+                  />
+                </StickyEvent>
+                {(analyzing || analyzed) && (
+                  <UltronAnalyzingCard thread={thread} onDecide={onDecide} analyzed={analyzed} />
+                )}
+                {/* One accumulating trail across awaiting → executing → resolved.
+                    Keyed by case id so it remounts only when the case changes,
+                    not when the same case advances — so revealed cards persist
+                    and a new action appends rather than clears. */}
+                {(awaitingDecision || executing || resolved) && (
+                  <UltronActivityCards key={thread.id} thread={thread} />
+                )}
+              </>
+            );
+          })()}
+        </Feed>
+      ) : (
+        <Feed>
+          {ids.length === 0 ? (
+            <Empty role="status">{EMPTY_COPY[section]}</Empty>
+          ) : (
+            ids.map(id => {
+              const thread = threads.find(t => t.id === id);
+              if (!thread) return null;
+              return (
+                <CardSlot key={id} ref={el => { cardRefs.current[id] = el; }}>
+                  <UltronCard
+                    thread={thread}
+                    stage={stageById[id] ?? 0}
+                    expanded={expandedId === id}
+                    onToggle={() => setExpandedId(cur => (cur === id ? null : id))}
+                    onDecide={onDecide}
+                    onAction={onAction}
+                    onRefinement={onRefinement}
+                    onSaveWorkflow={onSaveWorkflow}
+                  />
+                </CardSlot>
+              );
+            })
+          )}
+        </Feed>
+      )}
+      </Scroll>
+      {dockThread ? (
+        /* Detached decision surface, snapped to the foot of the page. */
+        <ActionDock>
+          <ActionDockInner>
+            <UltronActionCard
+              key={dockThread.id}
+              thread={dockThread}
+              stage={stageById[dockThread.id] ?? 0}
+              onAction={onAction}
+              onRefinement={onRefinement}
+              onSaveWorkflow={onSaveWorkflow}
+              onDismiss={id => setDismissedDockIds(prev => prev.includes(id) ? prev : [...prev, id])}
+            />
+          </ActionDockInner>
+        </ActionDock>
+      ) : (
+        /* Bottom dissolve: a band fixed to the foot of the page; cases scroll
+           behind it and fade out as they pass under. */
+        <BottomFade aria-hidden="true" />
+      )}
+    </Page>
+  );
+}
+
+// ── Styled ───────────────────────────────────────────────────────────────────
+
+/* Relative shell: a column holding the scroll area above the (optional) docked
+   actionable card / bottom band. */
+const Page = styled.div`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* Cancel the shell's ContentMain bottom padding for Ultron only: this page
+     owns its full height and snaps the action dock / bottom fade to the very
+     foot. Reclaim the 32px the padding carves off the content box, then pull the
+     margin box back up by the same amount so it adds no scroll overflow. */
+  height: calc(100% + var(--space-8));
+  margin-bottom: calc(-1 * var(--space-8));
+  min-height: 0;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  color: var(--color-content-primary);
+`;
+
+/* The actual scroller — the feed lives here. A thin always-styled scrollbar
+   (matching the shell's ContentMain / NavMiddle) makes the vertical scroll
+   obvious instead of relying on macOS's invisible overlay scrollbar. */
+const Scroll = styled.div`
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-5);
+  scrollbar-gutter: stable;
+
+  &::-webkit-scrollbar { width: 6px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb {
+    background: var(--color-border-opaque, #e8eaee);
+    border-radius: 99px;
+  }
+`;
+
+/* Actionable card dock — a fixed section at the foot of the page (snapped to
+   bottom), the event card scrolling independently above it. */
+const ActionDock = styled.div`
+  flex-shrink: 0;
+  padding: var(--space-4) var(--space-5) var(--space-5);
+`;
+
+const ActionDockInner = styled.div`
+  max-width: 720px;
+  margin: 0 auto;
+`;
+
+/* Vertical feed column — centered, comfortable reading width. */
+const Feed = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+`;
+
+/* Anchor for scroll-into-view; scroll-margin keeps the card clear of the top
+   edge when the sidebar selects it. */
+const CardSlot = styled.div`
+  scroll-margin-top: var(--space-5);
+`;
+
+/* Pins the paged event card to the top of the scroll area; the activity cards
+   below scroll underneath it (the card is opaque, so they dissolve under it). */
+const StickyEvent = styled.div`
+  position: sticky;
+  top: 0;
+  z-index: 5;
+`;
+
+const Empty = styled.div`
+  padding: var(--space-12) var(--space-4);
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--color-content-tertiary);
+`;
+
+/* Bottom dissolve: a 120px band pinned to the foot of the scroll area, opaque
+   page bg at the bottom fading to transparent at the top, so cases melt into the
+   page as they scroll off. Negative margin overlays it on the feed (no dead
+   scroll space); pointer-events:none keeps the cases beneath it clickable. */
+/* Fixed to the foot of the page (not part of the scroll flow): cases scroll
+   behind it and dissolve. Inset L/R to line up with the feed/header. */
+const BottomFade = styled.div`
+  position: absolute;
+  left: var(--space-5);
+  right: var(--space-5);
+  bottom: 0;
+  height: 120px;
+  background: linear-gradient(to top, var(--color-bg-primary) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 2;
+`;

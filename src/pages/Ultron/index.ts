@@ -2,6 +2,7 @@ export { UltronPage } from './UltronPage';
 export type { UltronSection } from './UltronPage';
 export { UltronIdentityCard } from './UltronIdentityCard';
 export { AgentMark } from './AgentMark';
+export { TypingText } from './TypingText';
 export { MemoryPage } from './MemoryPage';
 export { UltronSidebar } from './UltronSidebar';
 export { AccountDbSidebar, ACCOUNT_COLLECTIONS } from './AccountDbSidebar';

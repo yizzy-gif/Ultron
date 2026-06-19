@@ -6,9 +6,14 @@
 
 import { useMemo, useReducer, useState } from 'react';
 import { useToast } from 'alloy-design-system';
-import { ultronThreads, RESOLVE_OUTCOMES, THREAD_FOLLOWUPS, WORKING_ACTIVITIES } from './fixtures';
+import { ultronThreads, RESOLVE_OUTCOMES, THREAD_FOLLOWUPS, WORKING_ACTIVITIES, spawnThreadFromEvent } from './fixtures';
+import type { IncomingEvent } from './fixtures';
 import type { ThreadItem, ThreadStatus } from './types';
 import { SEVERITY_RANK } from './ultronShared';
+
+/** A case Ultron opened itself from a detected risk signal (vs. an authored
+ *  fixture). These float to the top of the New group the moment they land. */
+const isDetected = (t: ThreadItem) => t.id.startsWith('detected_');
 
 // Activity labels shown one-by-one while a thread executes (Live stream).
 export const EXECUTION_ACTIVITIES = ['Thinking', 'Working', 'Processing'];
@@ -30,10 +35,18 @@ type Action =
   | { type: 'decide'; threadId: string }
   | { type: 'commit'; threadId: string }
   | { type: 'reopen'; threadId: string }
-  | { type: 'resolve'; threadId: string };
+  | { type: 'resolve'; threadId: string }
+  | { type: 'detect'; thread: ThreadItem };
 
 function reducer(state: ThreadItem[], action: Action): ThreadItem[] {
   switch (action.type) {
+    case 'detect':
+      // A risk Ultron just flagged on the Live landing → opens a fresh analyzing
+      // case at the head of the list (it sorts to the top of New). Idempotent:
+      // a given signal only ever opens one case.
+      return state.some(t => t.id === action.thread.id)
+        ? state
+        : [action.thread, ...state];
     case 'decide':
       // Ultron finished analyzing → it has a recommendation and now needs the
       // user's approval (analyzing → Needs attention).
@@ -89,7 +102,13 @@ export interface UltronStore {
   /** Ids whose analysis completed (analyzing → Needs approval) — keeps the
    *  "Analyzed" summary card on the page. */
   analyzedIds: string[];
+  /** Outbound messages the operator has sent per thread (the action labels they
+   *  approved from the prompt card), shown as sent bubbles in the message thread. */
+  outboundByThread: Record<string, string[]>;
   setSelectedId: (id: string) => void;
+  /** Open a fresh analyzing case from a risk signal detected on the Live
+   *  landing. Idempotent per signal; the user stays on Live while it lands. */
+  detectRisk: (event: IncomingEvent) => void;
   /** DEMO ONLY — advance an analyzing case to Needs approval (reveals the prompt). */
   decide: (threadId: string) => void;
   commit: (threadId: string, label: string) => void;
@@ -127,9 +146,11 @@ export function useUltronStore(): UltronStore {
       // card travels Needs attention → Working → Done, or back for a follow-up).
       threads: indexed
         .filter(x => g.statuses.includes(x.item.status))
-        // Needs-attention cases float above still-analyzing ones, then
-        // severity-first, then authored recency (ascending fixture index).
+        // Freshly-detected cases float to the very top, then needs-attention
+        // cases above still-analyzing ones, then severity-first, then authored
+        // recency (ascending fixture index).
         .sort((a, b) =>
+          ((isDetected(b.item) ? 1 : 0) - (isDetected(a.item) ? 1 : 0)) ||
           ((a.item.status === 'analyzing' ? 1 : 0) - (b.item.status === 'analyzing' ? 1 : 0)) ||
           (SEVERITY_RANK[a.item.severity] - SEVERITY_RANK[b.item.severity]) || (a.index - b.index))
         .map(x => x.item),
@@ -145,6 +166,21 @@ export function useUltronStore(): UltronStore {
   // Cases that finished analysis (analyzing → Needs approval). Keeps the
   // "Analyzed" summary card on the page after the analysis completes.
   const [analyzedIds, setAnalyzedIds] = useState<string[]>([]);
+
+  // Outbound messages per thread — each action the operator approves from the
+  // prompt card is appended here and rendered as a sent bubble under the trail.
+  const [outboundByThread, setOutboundByThread] = useState<Record<string, string[]>>({});
+
+  // A risk surfaced on the Live landing → Ultron opens a case. Lands a fresh
+  // analyzing case at the top of New (orbit/working mark + typing title in the
+  // sidebar). The user stays on the Live landing; the New badge ticks up.
+  const detectRisk = (event: IncomingEvent) => {
+    dispatch({ type: 'detect', thread: spawnThreadFromEvent(event) });
+    toast.info('Risk detected', {
+      description: `Ultron opened a case: ${event.name}.`,
+      size: 'lg',
+    });
+  };
 
   // DEMO ONLY — simulate Ultron finishing its analysis: flip the case to Needs
   // approval so the recommendation prompt + CTAs appear.
@@ -168,6 +204,12 @@ export function useUltronStore(): UltronStore {
     // Keep the view anchored on this case as it travels Working → Done (or back
     // to Needs attention for a follow-up); the sidebar selection follows it.
     setSelectedId(threadId);
+
+    // Record the operator's reply as an outbound message in the thread.
+    setOutboundByThread(prev => ({
+      ...prev,
+      [threadId]: [...(prev[threadId] ?? []), label],
+    }));
 
     // The activity sequence that will play during this execution (the follow-up
     // sequence when running the second step, otherwise the thread's own).
@@ -207,5 +249,5 @@ export function useUltronStore(): UltronStore {
     });
   };
 
-  return { threads, groups, selectedId, selectedThread, selectedStage, stageById, viewedIds, analyzedIds, setSelectedId, decide, commit, refine, saveWorkflow };
+  return { threads, groups, selectedId, selectedThread, selectedStage, stageById, viewedIds, analyzedIds, outboundByThread, setSelectedId, detectRisk, decide, commit, refine, saveWorkflow };
 }

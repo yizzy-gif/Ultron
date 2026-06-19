@@ -15,6 +15,7 @@ import type { ThreadItem, ThreadStatus } from './types';
 import { SEVERITY_RANK, isPurpleRow } from './ultronShared';
 import { UltronCard, UltronActionCard, UltronAnalyzingCard, UltronActivityCards } from './UltronCard';
 import { LiveLanding } from './LiveLanding';
+import type { IncomingEvent } from './fixtures';
 
 /** Which lifecycle bucket the page is showing. Mirrors the sidebar groups.
  *  `live` — the default landing: Ultron's resting presence (large Circle mark).
@@ -47,6 +48,9 @@ interface UltronPageProps {
   section: UltronSection;
   /** Ids whose analysis finished — keep an "Analyzed" summary card on the page. */
   analyzedIds: string[];
+  /** Outbound messages per thread — the operator's approved replies, shown as
+   *  sent bubbles in the message thread under the activities. */
+  outboundByThread: Record<string, string[]>;
   /** Thread the sidebar has selected — expanded + scrolled into view. */
   selectedId: string | null;
   /** DEMO ONLY — advance an analyzing case to Needs approval. */
@@ -56,6 +60,8 @@ interface UltronPageProps {
   onSaveWorkflow: (thread: ThreadItem) => void;
   /** Close the case detail and return to the Live landing. */
   onClose: () => void;
+  /** Fired when a risk signal surfaces on the Live landing — opens a New case. */
+  onDetectRisk: (event: IncomingEvent) => void;
 }
 
 /** How long the close animation plays before the page swaps to Live. Kept in
@@ -63,7 +69,7 @@ interface UltronPageProps {
 const CLOSE_MS = 280;
 
 export function UltronPage({
-  threads, stageById, section, analyzedIds, selectedId, onDecide, onAction, onRefinement, onSaveWorkflow, onClose,
+  threads, stageById, section, analyzedIds, outboundByThread, selectedId, onDecide, onAction, onRefinement, onSaveWorkflow, onClose, onDetectRisk,
 }: UltronPageProps) {
   // While true, the paged case detail plays its exit animation; once it finishes
   // we hand off to the parent, which swaps the page to the Live landing.
@@ -140,7 +146,7 @@ export function UltronPage({
   if (section === 'live') {
     return (
       <Page>
-        <LiveLanding threads={threads} />
+        <LiveLanding onDetectRisk={onDetectRisk} />
       </Page>
     );
   }
@@ -205,7 +211,11 @@ export function UltronPage({
                     not when the same case advances — so revealed cards persist
                     and a new action appends rather than clears. */}
                 {(awaitingDecision || executing || resolved) && (
-                  <UltronActivityCards key={thread.id} thread={thread} />
+                  <UltronActivityCards
+                    key={thread.id}
+                    thread={thread}
+                    outbound={outboundByThread[thread.id] ?? []}
+                  />
                 )}
               </>
             );
@@ -238,8 +248,10 @@ export function UltronPage({
         </Feed>
       )}
       </Scroll>
-      {dockThread ? (
-        /* Detached decision surface, snapped to the foot of the page. */
+      {dockThread && (
+        /* Detached decision surface, snapped to the foot of the page. The
+           bottom dissolve is handled by the Scroll mask above (so it applies
+           whether or not this dock is present). */
         <ActionDock>
           <ActionDockInner>
             <UltronActionCard
@@ -253,10 +265,6 @@ export function UltronPage({
             />
           </ActionDockInner>
         </ActionDock>
-      ) : (
-        /* Bottom dissolve: a band fixed to the foot of the page; cases scroll
-           behind it and fade out as they pass under. */
-        <BottomFade aria-hidden="true" />
       )}
     </Page>
   );
@@ -309,6 +317,16 @@ const Scroll = styled.div`
   padding: var(--space-5);
   scrollbar-gutter: stable;
 
+  /* Soft top + bottom dissolve so thread content fades as it scrolls in and out
+     (works whether or not the decision dock sits below). The TOP fade is sized
+     to the scroll padding (--space-5) so it dissolves content peeking above the
+     pinned event card while leaving the card itself — which sticks at that same
+     padding edge — crisp. The BOTTOM fade dissolves content above the dock /
+     page foot. */
+  --scroll-fade: var(--space-12);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--space-5), #000 calc(100% - var(--scroll-fade)), transparent 100%);
+          mask-image: linear-gradient(to bottom, transparent 0, #000 var(--space-5), #000 calc(100% - var(--scroll-fade)), transparent 100%);
+
   &::-webkit-scrollbar { width: 6px; }
   &::-webkit-scrollbar-track { background: transparent; }
   &::-webkit-scrollbar-thumb {
@@ -360,19 +378,3 @@ const Empty = styled.div`
   color: var(--color-content-tertiary);
 `;
 
-/* Bottom dissolve: a 120px band pinned to the foot of the scroll area, opaque
-   page bg at the bottom fading to transparent at the top, so cases melt into the
-   page as they scroll off. Negative margin overlays it on the feed (no dead
-   scroll space); pointer-events:none keeps the cases beneath it clickable. */
-/* Fixed to the foot of the page (not part of the scroll flow): cases scroll
-   behind it and dissolve. Inset L/R to line up with the feed/header. */
-const BottomFade = styled.div`
-  position: absolute;
-  left: var(--space-5);
-  right: var(--space-5);
-  bottom: 0;
-  height: 120px;
-  background: linear-gradient(to top, var(--color-bg-primary) 0%, transparent 100%);
-  pointer-events: none;
-  z-index: 2;
-`;

@@ -14,7 +14,8 @@
 import { useEffect, useRef, useState } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { AgentMark } from './AgentMark';
-import type { ThreadItem } from './types';
+import { INCOMING_EVENTS } from './fixtures';
+import type { IncomingEvent } from './fixtures';
 
 /** What Ultron is doing while it rests on the Live landing — cycled below the
  *  mark, matching the secondary-nav identity card's copy. */
@@ -27,8 +28,10 @@ const STATUS_MESSAGES = [
 
 const STATUS_INTERVAL_MS = 2800;
 
-/** Rendered px of the Orbit hero mark — large enough to read as the page's
- *  hero, scaled down on short/narrow viewports via the responsive override. */
+/** Rendered px of the Circle identity hero mark — large enough to read as the
+ *  page's hero, scaled down on short/narrow viewports via the responsive
+ *  override. The landing shows Ultron's Circle identity motion (the same mark
+ *  used in the nav), rendered at hero scale with its full lush treatment. */
 const MARK_SIZE = 200;
 
 /** How many event cards the feed shows at once, how often a new one arrives,
@@ -43,19 +46,31 @@ type CardPhase = 'entering' | 'in' | 'leaving';
 
 interface FeedCard {
   key: number;
-  thread: ThreadItem;
+  event: IncomingEvent;
   phase: CardPhase;
 }
 
 interface LiveLandingProps {
-  /** The cases Ultron is tracking — rendered as the live event feed below the
-   *  hero: a conveyor where each card pops + fades in at the bottom, the stack
-   *  slides up, and the top card fades out as it leaves. */
-  threads: ThreadItem[];
+  /** Fired the moment a "Risk detected" signal surfaces in the feed (its
+   *  entering tick) — escalates it into a fresh New case. Each signal fires at
+   *  most once. */
+  onDetectRisk?: (event: IncomingEvent) => void;
 }
 
-export function LiveLanding({ threads }: LiveLandingProps) {
+export function LiveLanding({ onDetectRisk }: LiveLandingProps) {
   const [i, setI] = useState(0);
+
+  // Latest detect callback held in a ref so the conveyor effect below never
+  // re-runs (and re-seeds) just because the parent handed a new closure.
+  const onDetectRef = useRef(onDetectRisk);
+  onDetectRef.current = onDetectRisk;
+  // Signals already escalated this session — each risk opens a case only once.
+  const detectedRef = useRef<Set<string>>(new Set());
+
+  // While a risk has just surfaced in the feed, the hero core blooms into its
+  // colored gradient (alert) state, then settles back to mono.
+  const [riskActive, setRiskActive] = useState(false);
+  const riskTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setI(x => (x + 1) % STATUS_MESSAGES.length), STATUS_INTERVAL_MS);
@@ -66,32 +81,67 @@ export function LiveLanding({ threads }: LiveLandingProps) {
   // bottom (entering → it expands + pops + fades in, sliding the stack up) and
   // retires the oldest (leaving → it collapses + fades out at the top), then
   // drops the retired card once its exit motion finishes.
-  const windowSize = Math.min(FEED_WINDOW, threads.length);
+  const windowSize = Math.min(FEED_WINDOW, INCOMING_EVENTS.length);
   const [cards, setCards] = useState<FeedCard[]>([]);
   const keyRef = useRef(0);
-  const cursorRef = useRef(0);
+
+  // Event sequencer: the feed is overwhelmingly routine "No action required"
+  // signals, with a risk surfacing only every ~7 of them (randomised 5–9) so the
+  // landing reads calm and a "Risk detected" lands as a rare, notable event.
+  const routinePool = useRef(INCOMING_EVENTS.filter(e => !e.risk));
+  const riskPool = useRef(INCOMING_EVENTS.filter(e => e.risk));
+  const seqRef = useRef({ routine: 0, risk: 0, sinceRisk: 0, gap: 0 });
+  const nextGap = () => 5 + Math.floor(Math.random() * 5); // 5–9, averaging 7
+  const nextEvent = (): IncomingEvent => {
+    const s = seqRef.current;
+    const risks = riskPool.current;
+    if (risks.length > 0 && s.sinceRisk >= s.gap) {
+      s.sinceRisk = 0;
+      s.gap = nextGap();
+      return risks[s.risk++ % risks.length];
+    }
+    s.sinceRisk += 1;
+    const routine = routinePool.current;
+    return routine.length > 0
+      ? routine[s.routine++ % routine.length]
+      : risks[s.risk++ % risks.length];
+  };
 
   useEffect(() => {
-    if (threads.length === 0) {
+    if (INCOMING_EVENTS.length === 0) {
       setCards([]);
       return;
     }
-    // Seed a full window already settled in place, then start the conveyor.
+    // Reset the sequencer, then seed a full window already settled in place
+    // (begins mid-gap so the landing opens on routine signals), then run.
+    seqRef.current = { routine: 0, risk: 0, sinceRisk: 0, gap: nextGap() };
     keyRef.current = 0;
     setCards(
-      Array.from({ length: windowSize }, (_, r) => ({
+      Array.from({ length: windowSize }, () => ({
         key: keyRef.current++,
-        thread: threads[r % threads.length],
+        event: nextEvent(),
         phase: 'in' as CardPhase,
       })),
     );
-    cursorRef.current = windowSize;
 
     const timers: ReturnType<typeof setTimeout>[] = [];
     const t = setInterval(() => {
-      const thread = threads[cursorRef.current % threads.length];
-      cursorRef.current += 1;
+      const event = nextEvent();
       const newKey = keyRef.current++;
+
+      // The detection moment: a risk signal entering the feed escalates into a
+      // fresh New case — once per signal.
+      if (event.risk && !detectedRef.current.has(event.id)) {
+        detectedRef.current.add(event.id);
+        onDetectRef.current?.(event);
+      }
+
+      // Every risk surfacing pulses the hero core into its colored alert state.
+      if (event.risk) {
+        setRiskActive(true);
+        if (riskTimerRef.current) clearTimeout(riskTimerRef.current);
+        riskTimerRef.current = setTimeout(() => setRiskActive(false), 2800);
+      }
 
       setCards(prev => {
         const live = prev.filter(c => c.phase !== 'leaving');
@@ -99,7 +149,7 @@ export function LiveLanding({ threads }: LiveLandingProps) {
         const updated = prev.map(c =>
           c.key === retireKey ? { ...c, phase: 'leaving' as CardPhase } : c,
         );
-        return [...updated, { key: newKey, thread, phase: 'entering' as CardPhase }];
+        return [...updated, { key: newKey, event, phase: 'entering' as CardPhase }];
       });
 
       // Promote the new card to its resting phase shortly after it mounts so
@@ -124,14 +174,15 @@ export function LiveLanding({ threads }: LiveLandingProps) {
     return () => {
       clearInterval(t);
       timers.forEach(clearTimeout);
+      if (riskTimerRef.current) clearTimeout(riskTimerRef.current);
     };
-  }, [threads.length, windowSize]);
+  }, [windowSize]);
 
   return (
     <Stage>
       <Hero>
         <Mark>
-          <AgentMark mark="orbit" size={MARK_SIZE} tone="auto" state="active" aria-label="Ultron" />
+          <AgentMark mark="circle" size={MARK_SIZE} tone="auto" state="active" coreGradient={riskActive} aria-label="Ultron" />
         </Mark>
         <Name>Ultron</Name>
         <Status role="status" aria-live="polite">
@@ -153,9 +204,31 @@ export function LiveLanding({ threads }: LiveLandingProps) {
             // row is collapsed.
             <Row key={c.key} data-phase={c.phase} aria-hidden={c.phase === 'leaving' || undefined}>
               <Clip>
-                <EventCard>
-                  <EventCap>{c.thread.capability}</EventCap>
-                  <EventTitle>{c.thread.title}</EventTitle>
+                <EventCard data-risk={c.event.risk || undefined}>
+                  <EventMain>
+                    <EventCap>{c.event.capability}</EventCap>
+                    <EventTitle>{c.event.title}</EventTitle>
+                  </EventMain>
+                  {/* Trailing identifier — routine signals read "No action
+                      required"; real risks show the orange Pulse mark. */}
+                  <EventTrail>
+                    {c.event.risk ? (
+                      <>
+                        <AgentMark
+                          mark="pulse"
+                          size={28}
+                          tone="auto"
+                          state="active"
+                          color="var(--color-orange-content-tertiary)"
+                          coreHalo={false}
+                          aria-hidden="true"
+                        />
+                        <RiskLabel>Risk detected</RiskLabel>
+                      </>
+                    ) : (
+                      <NoActionLabel>No action required</NoActionLabel>
+                    )}
+                  </EventTrail>
                 </EventCard>
               </Clip>
             </Row>
@@ -371,11 +444,14 @@ const Clip = styled.div`
 `;
 
 /* Borderless card on the Alloy secondary surface, resting at 50% opacity.
-   Hover lifts a card to full opacity. */
+   Hover lifts a card to full opacity. Risk signals carry a faint orange wash so
+   they read a touch hotter than routine ones, even at rest (no left accent —
+   the Pulse mark + label already mark them). */
 const EventCard = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   background: var(--color-bg-secondary);
   border-radius: var(--radius-lg);
@@ -383,6 +459,47 @@ const EventCard = styled.div`
   transition: opacity var(--duration-fast, 120ms) var(--ease-out, ease);
 
   &:hover { opacity: 1; }
+
+  &[data-risk] {
+    background: var(--color-orange-bg-tertiary, var(--color-bg-secondary));
+  }
+`;
+
+/* The card's left column — capability eyebrow over the event title. */
+const EventMain = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+`;
+
+/* Trailing identifier slot — the mark + label, pinned to the right edge. */
+const EventTrail = styled.div`
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+`;
+
+/* "Risk detected" — orange, beside the Pulse mark. The Pulse draws a small
+   core centred in a 28px canvas, so ~12px of dead space sits between the dot
+   and the canvas edge; a negative margin crops it back so the visible gap from
+   the dot to the label reads as the intended 8px. */
+const RiskLabel = styled.span`
+  margin-left: -12px;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-orange-content-secondary, var(--color-orange-content-tertiary));
+  white-space: nowrap;
+`;
+
+/* "No action required" — quiet/muted for routine signals. */
+const NoActionLabel = styled.span`
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-slate-content-tertiary);
+  white-space: nowrap;
 `;
 
 /* Capability eyebrow above the event title. */

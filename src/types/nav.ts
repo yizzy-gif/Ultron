@@ -29,7 +29,9 @@ export interface SecondaryNavSection {
 
 export interface SecondaryNavMenuItem {
   id: string;
-  label: string;
+  /** Row label. Usually a string, but accepts a node so a row can animate
+   *  (e.g. a freshly-detected case typing its title in). */
+  label: ReactNode;
   icon?: ReactNode;
   isActive?: boolean;
   onClick?: () => void;

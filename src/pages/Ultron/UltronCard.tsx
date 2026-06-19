@@ -15,7 +15,9 @@ import type { ThreadItem } from './types';
 import {
   THREAD_SUBJECTS, threadAvatarUrl, THREAD_PROMPTS, threadDisplayTitle, threadMeta,
   THREAD_FOLLOWUPS, THREAD_RECORDS, THREAD_RESOLVED_RECORDS, activityForThread, analyzingSteps,
+  WORKING_ACTIVITIES,
 } from './fixtures';
+import type { ActivityMilestone, WorkingMilestone } from './fixtures';
 import { RecordCard } from './RecordCard';
 import {
   isPurpleRow, isRefinementAction, OutcomeBlock, toneFor, UNRESOLVED_ACTIONS,
@@ -417,36 +419,145 @@ export function UltronAnalyzingCard({ thread, onDecide, analyzed }: { thread: Th
 //
 // All three draw from one source (activityForThread), so moving between phases
 // just reveals more of the same list — taking an action appends, never refreshes.
-export function UltronActivityCards({ thread }: { thread: ThreadItem }) {
+/** A trail entry — either one of Ultron's activity cards or the operator's
+ *  sent message bubble. The trail is a single chronological stream of these. */
+type TrailItem =
+  | { kind: 'activity'; milestone: ActivityMilestone }
+  | { kind: 'message'; text: string };
+
+/** Working milestones carry a flat `detail` string; activity cards take blocks. */
+function workingToMilestone(w: WorkingMilestone): ActivityMilestone {
+  return { icon: w.icon, headline: w.headline, blocks: w.detail ? [{ text: w.detail }] : undefined };
+}
+
+/** Build the chronological trail for a case. With no operator action yet (or a
+ *  case resolved without one, e.g. autonomous/historical), it's just the full
+ *  activity trail. Once the operator acts, the trail interleaves: the reasoning
+ *  Ultron did BEFORE each decision, then the sent message, then the work Ultron
+ *  ran as a RESULT of it — repeating per stage (first action, then follow-up). */
+function buildTrail(thread: ThreadItem, outbound: string[]): { items: TrailItem[]; reasoningCount: number } {
   const milestones = activityForThread(thread);
-  const total = milestones.length;
+  const doneCount = thread.timeline.filter(s => s.done).length;
+  const reasoningCount = doneCount > 0 ? Math.min(doneCount, milestones.length) : milestones.length;
+
+  // No action taken this session → keep the full trail as-is (no messages).
+  if (outbound.length === 0) {
+    return { items: milestones.map(m => ({ kind: 'activity', milestone: m })), reasoningCount };
+  }
+
+  // The execution sequence Ultron runs after each decision: stage 0 is the
+  // case's own working sequence, stage 1 the follow-up's.
+  const followUp = THREAD_FOLLOWUPS[thread.id];
+  const segments: ActivityMilestone[][] = [
+    (WORKING_ACTIVITIES[thread.id] ?? []).map(workingToMilestone),
+    (followUp?.working ?? []).map(workingToMilestone),
+  ];
+
+  const items: TrailItem[] = milestones
+    .slice(0, reasoningCount)
+    .map(m => ({ kind: 'activity', milestone: m } as TrailItem));
+  outbound.forEach((text, stage) => {
+    items.push({ kind: 'message', text });
+    (segments[stage] ?? []).forEach(m => items.push({ kind: 'activity', milestone: m }));
+  });
+  return { items, reasoningCount };
+}
+
+export function UltronActivityCards({ thread, outbound = [] }: { thread: ThreadItem; outbound?: string[] }) {
   const executing = thread.status === 'in_progress';
   const resolved = thread.status === 'resolved' || thread.status === 'auto_resolved';
 
-  // Completed reasoning steps shown while awaiting a decision (all milestones
-  // when the timeline carries no done flags — mirrors the prior reasoning trail).
-  const doneCount = thread.timeline.filter(s => s.done).length;
-  const reasoningCount = doneCount > 0 ? Math.min(doneCount, total) : total;
+  const { items, reasoningCount } = buildTrail(thread, outbound);
 
-  // Revealed-card count: seeded with the reasoning steps, then only ever grows
+  // Revealed-item count: seeded with the reasoning steps, then only ever grows
   // toward the full trail. Because this component stays mounted across phases,
-  // the count persists — so acting on a case appends new cards rather than
+  // the count persists — so acting on a case appends new entries rather than
   // clearing and re-growing the trail from scratch.
   const [count, setCount] = useState(reasoningCount);
-  const target = executing || resolved ? total : reasoningCount;
+  // Once the operator has acted, every available entry (their message + the
+  // resulting work) streams in; otherwise only the reasoning shows until the
+  // case actually executes/resolves.
+  const target = outbound.length > 0
+    ? items.length
+    : (executing || resolved ? items.length : reasoningCount);
 
   useEffect(() => {
     if (count >= target) return;
-    const t = setTimeout(() => setCount(c => c + 1), ACTIVITY_STEP_MS);
+    // Sent messages pop in immediately; activity cards pace in one at a time.
+    const delay = items[count]?.kind === 'message' ? 0 : ACTIVITY_STEP_MS;
+    const t = setTimeout(() => setCount(c => c + 1), delay);
     return () => clearTimeout(t);
-  }, [count, target]);
+  }, [count, target]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The newest card types its headline out only while Ultron is actively working
-  // AND only for steps revealed beyond the settled reasoning — so taking an
-  // action appends-and-types new cards without re-typing the ones already shown.
-  const typingIndex = executing && count > reasoningCount ? count - 1 : undefined;
+  // Group the revealed stream into runs of consecutive activity cards split by
+  // message bubbles, so each run renders as one flush activity block and the
+  // messages sit between them.
+  const revealed = items.slice(0, count);
+  const groups: ({ type: 'acts'; milestones: ActivityMilestone[] } | { type: 'msg'; text: string })[] = [];
+  for (const it of revealed) {
+    if (it.kind === 'message') { groups.push({ type: 'msg', text: it.text }); continue; }
+    const last = groups[groups.length - 1];
+    if (last && last.type === 'acts') last.milestones.push(it.milestone);
+    else groups.push({ type: 'acts', milestones: [it.milestone] });
+  }
 
-  return <ActivityTrailCards milestones={milestones} revealCount={count} typingIndex={typingIndex} />;
+  // The newest activity card types its headline out while Ultron is actively
+  // working and the stream is still growing — never re-typing settled cards.
+  const streaming = count < items.length;
+  const newestIsActivity = revealed.length > 0 && revealed[revealed.length - 1].kind === 'activity';
+  const typingOn = executing && streaming && newestIsActivity;
+  let lastActsIdx = -1;
+  groups.forEach((g, i) => { if (g.type === 'acts') lastActsIdx = i; });
+
+  // Once the operator has acted, the reasoning that preceded their first reply
+  // is "legacy" — collapse it so the live work stays the focus. Activity groups
+  // before the first message bubble are that pre-action reasoning.
+  let seenMessage = false;
+
+  // The step Ultron is actively working is the newest revealed activity — but
+  // only when it's genuinely the latest item in the trail (the last group is an
+  // activity run, not a just-sent message awaiting its first execution card).
+  const lastIdx = groups.length - 1;
+
+  return (
+    <>
+      {groups.map((g, i) => {
+        if (g.type === 'msg') { seenMessage = true; return <UltronOutboundMessages key={`m${i}`} messages={[g.text]} />; }
+        const isLegacy = !seenMessage && outbound.length > 0;
+        // Its leading icon slot shows the animated agent mark instead of a static
+        // icon while the case is in progress.
+        const isWorkingGroup = executing && seenMessage && i === lastIdx;
+        return (
+          <ActivityTrailCards
+            key={`a${i}`}
+            milestones={g.milestones}
+            typingIndex={i === lastActsIdx && typingOn ? g.milestones.length - 1 : undefined}
+            collapsed={isLegacy}
+            workingIndex={isWorkingGroup ? g.milestones.length - 1 : undefined}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+// Outbound messages — the operator's replies in the thread. Each label the user
+// approved from the prompt card lands here as a right-aligned sent bubble,
+// placed directly under the existing activities so the middle space reads as a
+// conversation between the operator and Ultron.
+export function UltronOutboundMessages({ messages }: { messages: string[] }) {
+  if (!messages.length) return null;
+  return (
+    <OutboundList>
+      {messages.map((text, i) => (
+        <OutboundRow key={i}>
+          <OutboundBubble>
+            <OutboundText>{text}</OutboundText>
+          </OutboundBubble>
+        </OutboundRow>
+      ))}
+    </OutboundList>
+  );
 }
 
 
@@ -821,4 +932,46 @@ const OtherPill = styled(Button)`
   color: var(--color-content-secondary);
   padding-left: var(--space-3);
   padding-right: var(--space-3);
+`;
+
+/* Outbound (sent) messages — right-aligned chat bubbles, stacked below the
+   activity trail. A small top gap separates them from the last activity card. */
+const OutboundList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+`;
+
+const OutboundRow = styled.div`
+  display: flex;
+  justify-content: flex-end;
+`;
+
+/* Each sent bubble slides up + fades in as it's appended. */
+const bubbleIn = keyframes`
+  from { opacity: 0; transform: translateY(var(--space-2)); }
+  to   { opacity: 1; transform: translateY(0); }
+`;
+
+/* Dark inverse fill, right side — the operator's voice in the thread. */
+const OutboundBubble = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  max-width: 80%;
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-bg-inverse-primary);
+  border-radius: var(--radius-full);
+  animation: ${bubbleIn} var(--duration-base) var(--ease-out);
+
+  @media (prefers-reduced-motion: reduce) { animation: none; }
+`;
+
+const OutboundText = styled.span`
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-content-inverse-primary);
 `;

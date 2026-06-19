@@ -39,12 +39,14 @@ function FilterLinesIcon() {
 
 // Shared CSS vars for 32px list item height. The 4px horizontal inset (--li-px)
 // gives the hover/selected background symmetric left-right breathing room and
-// keeps the icon column aligned with the group chevron column.
+// keeps the icon column aligned with the group chevron column. --li-gap is the
+// space between the leading icon slot and the row label (kept in sync with the
+// group header chevron→label gap so labels share one indentation).
 const LIST_ITEM_SIZE_STYLE = {
   '--li-min-height': '32px',
   '--li-py': '0px',
   '--li-px': '4px',
-  '--li-gap': '4px',
+  '--li-gap': '12px',
   borderRadius: '6px',
   borderBottom: 'none',
 } as React.CSSProperties;

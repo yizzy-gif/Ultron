@@ -19,7 +19,7 @@
    · Array order is authored most-recent-first; recency sorting relies on it.
    ───────────────────────────────────────────────────────────────────────────── */
 
-import type { ThreadItem } from './types';
+import type { ThreadItem, ThreadSeverity } from './types';
 
 export const ultronThreads: ThreadItem[] = [
   // ── Analyzing (events just in; Ultron is still thinking — no decision yet) ──
@@ -592,12 +592,14 @@ export const THREAD_RESOLVED_RECORDS: Record<string, RecordRef> = {
 };
 
 /** Past-activity breakdown shown (expandable) on a resolved card. A block is a
- *  paragraph, and/or a labeled bullet list, and/or a labeled check list. */
+ *  paragraph, and/or a labeled bullet list, a labeled check list, and/or a list
+ *  of referenced records (people/shifts) rendered as record cards. */
 export interface ActivityBlock {
   text?: string;
   label?: string;
   bullets?: string[];
   checks?: string[];
+  records?: RecordRef[];
 }
 
 export interface ActivityMilestone {
@@ -630,7 +632,20 @@ const THREAD_ACTIVITY: Record<string, ActivityMilestone[]> = {
       headline: '12 qualified replacements identified',
       blocks: [
         { text: 'Ultron found employees that match role requirements, availability, attendance history, and commute distance.' },
-        { label: 'Top Matches', bullets: ['Sarah Kim — 94%', 'James Carter — 91%', 'Priya Patel — 88%'] },
+        { label: 'Top Matches', records: [
+          { eyebrow: 'RN', title: 'Sarah Kim',       meta: ['94% match', 'Available now'], avatarSeed: 'sarah_kim' },
+          { eyebrow: 'RN', title: 'James Carter',    meta: ['91% match', 'Available now'], avatarSeed: 'james_carter' },
+          { eyebrow: 'RN', title: 'Priya Patel',     meta: ['88% match', 'Available now'], avatarSeed: 'priya_patel' },
+          { eyebrow: 'RN', title: 'Daniel Brooks',   meta: ['86% match', 'Available now'], avatarSeed: 'daniel_brooks' },
+          { eyebrow: 'RN', title: 'Aisha Khan',      meta: ['84% match', 'Available now'], avatarSeed: 'aisha_khan' },
+          { eyebrow: 'RN', title: 'Marcus Lee',      meta: ['82% match', 'Available now'], avatarSeed: 'marcus_lee' },
+          { eyebrow: 'RN', title: 'Elena Rodriguez', meta: ['80% match', 'Available now'], avatarSeed: 'elena_rodriguez' },
+          { eyebrow: 'RN', title: 'Tom Nguyen',      meta: ['78% match', 'Available now'], avatarSeed: 'tom_nguyen' },
+          { eyebrow: 'RN', title: 'Olivia Bennett',  meta: ['76% match', 'Available now'], avatarSeed: 'olivia_bennett' },
+          { eyebrow: 'RN', title: 'David Okafor',    meta: ['74% match', 'Available now'], avatarSeed: 'david_okafor' },
+          { eyebrow: 'RN', title: 'Hannah Schmidt',  meta: ['72% match', 'Available now'], avatarSeed: 'hannah_schmidt' },
+          { eyebrow: 'RN', title: 'Raj Mehta',       meta: ['70% match', 'Available now'], avatarSeed: 'raj_mehta' },
+        ] },
         { label: 'Matching Factors', checks: ['RN qualified', 'Available during shift', 'Strong attendance history', 'Within commute radius'] },
       ],
     },
@@ -754,7 +769,10 @@ const THREAD_ACTIVITY: Record<string, ActivityMilestone[]> = {
     {
       icon: 'alert',
       headline: 'Two employees drive most of the overage',
-      blocks: [{ label: 'Top contributors', bullets: ['Marcus Lee — 11 OT hrs', 'Dana Whitfield — 7 OT hrs'] }],
+      blocks: [{ label: 'Top contributors', records: [
+        { eyebrow: 'RN', title: 'Marcus Lee',     meta: ['11 OT hrs', 'Memorial East'], avatarSeed: 'marcus_lee' },
+        { eyebrow: 'RN', title: 'Dana Whitfield', meta: ['7 OT hrs', 'Memorial East'],  avatarSeed: 'dana_whitfield' },
+      ] }],
     },
     {
       icon: 'send',
@@ -918,6 +936,128 @@ export function activityForThread(thread: ThreadItem): ActivityMilestone[] {
         blocks: detail ? [{ text: detail }] : undefined,
       };
     });
+}
+
+// ── Live landing — incoming signal stream ──────────────────────────────────
+// The Live landing feed is a conveyor of incoming operational signals Ultron is
+// watching. Each carries a trailing identifier: most are routine ("No action
+// required"), but some are real risks ("Risk detected") — those show the orange
+// Pulse mark and, the moment they surface, escalate into a fresh New case.
+
+/** One signal in the Live landing feed. */
+export interface IncomingEvent {
+  id: string;
+  /** Capability eyebrow shown above the title. */
+  capability: string;
+  /** Event headline shown in the feed card. */
+  title: string;
+  /** Short case name used as the New-group nav label when a risk escalates. */
+  name: string;
+  /** A real risk: shows the orange Pulse mark and escalates into the New group
+   *  as a fresh analyzing case. Routine signals (false) read "No action required". */
+  risk: boolean;
+  severity?: ThreadSeverity;
+  assessment?: string;
+  recommendation?: string;
+}
+
+/** The signal stream cycled through the Live landing feed (interleaved risk /
+ *  routine so the conveyor reads as a live mix). */
+export const INCOMING_EVENTS: IncomingEvent[] = [
+  {
+    id: 'lakeside_double_callout',
+    capability: 'Coverage Recovery',
+    title: 'Two RNs called out of tonight’s shift at Lakeside Care',
+    name: 'Lakeside Coverage Gap',
+    risk: true,
+    severity: 'high',
+    assessment: 'Coverage risk detected. Two openings on the night shift with no replacements assigned.',
+    recommendation: 'Pull from the float pool and notify the charge nurse.',
+  },
+  {
+    id: 'schedule_published',
+    capability: 'Scheduling',
+    title: 'Next week’s schedule published at Memorial East',
+    name: 'Schedule Published',
+    risk: false,
+  },
+  {
+    id: 'ot_budget_breach',
+    capability: 'Labor Cost',
+    title: 'Night-shift overtime crossed 120% of weekly budget',
+    name: 'Overtime Breach',
+    risk: true,
+    severity: 'medium',
+    assessment: 'Overtime is pacing well over budget. Two employees account for most of the overage.',
+    recommendation: 'Rebalance the night shift and move two slots to on-call.',
+  },
+  {
+    id: 'swap_approved',
+    capability: 'Scheduling',
+    title: 'Shift swap approved between two RNs at Westgate',
+    name: 'Shift Swap',
+    risk: false,
+  },
+  {
+    id: 'cna_cred_lapse',
+    capability: 'Compliance',
+    title: 'A CNA certification lapses before Friday’s scheduled shift',
+    name: 'Credential Lapse',
+    risk: true,
+    severity: 'medium',
+    assessment: 'An upcoming assignment would be out of compliance once the certification lapses.',
+    recommendation: 'Send a renewal reminder and flag the affected shift.',
+  },
+  {
+    id: 'order_filled',
+    capability: 'Marketplace',
+    title: 'Open order filled at Northside Facility',
+    name: 'Order Filled',
+    risk: false,
+  },
+  {
+    id: 'possible_no_show',
+    capability: 'Attendance Recovery',
+    title: 'Day-shift CNA not clocked in 15 minutes past start at Riverside',
+    name: 'Possible No-Show',
+    risk: true,
+    severity: 'high',
+    assessment: 'Pattern matches a likely no-show. Coverage risk detected.',
+    recommendation: 'Reach out to the employee and prepare a replacement search.',
+  },
+  {
+    id: 'timeoff_auto_approved',
+    capability: 'Time Off',
+    title: 'Time-off request auto-approved within policy',
+    name: 'Time Off Approved',
+    risk: false,
+  },
+];
+
+/** Build a fresh analyzing case from a detected risk signal — the case that
+ *  lands in the New group (orbit/working mark, typing title) the moment Ultron
+ *  flags the risk. Minimal but complete enough to flow through the case
+ *  pipeline (analyzing → Needs approval → …) via the generic fallbacks. */
+export function spawnThreadFromEvent(ev: IncomingEvent): ThreadItem {
+  return {
+    id: `detected_${ev.id}`,
+    name: ev.name,
+    title: ev.title,
+    capability: ev.capability,
+    status: 'analyzing',
+    severity: ev.severity ?? 'high',
+    event: ev.title.endsWith('.') ? ev.title : `${ev.title}.`,
+    assessment: ev.assessment ?? 'Assessing impact and weighing options before recommending a plan.',
+    recommendation: ev.recommendation ?? 'Prepare a recommended plan for your approval.',
+    outcome: null,
+    workflowOpportunity: null,
+    timeline: [
+      { state: 'detected', headline: ev.title, done: true },
+      { state: 'assessment', headline: 'Assessing impact and options', done: false },
+    ],
+    actions: ['Review plan', 'Approve plan'],
+    timestamp: 'Just now',
+  };
 }
 
 /** Outcome populated when an actioned thread auto-completes (demo lifecycle:

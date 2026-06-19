@@ -107,7 +107,7 @@ export const NavMiddle = styled.div`
   overflow-y: auto;
   min-height: 0;
   width: 100%;
-  padding: 8px 12px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -129,7 +129,9 @@ export const GroupRow = styled.button`
   width: 100%;
   min-height: 32px;
   padding: 0 4px;
-  gap: 4px;
+  /* Chevron→label gap matches the menu rows' --li-gap so group labels and child
+     labels share one indentation. */
+  gap: 12px;
   border-radius: 6px;
   cursor: pointer;
   color: var(--color-content-tertiary, #475569);
@@ -229,7 +231,9 @@ export const ShowMoreRow = styled.button`
   align-items: center;
   width: 100%;
   min-height: 32px;
-  padding: 0 8px 0 44px;
+  /* Left inset aligns the toggle text under the child labels (li-px 4 + icon
+     slot 32 + --li-gap 12). */
+  padding: 0 8px 0 48px;
   border-radius: 6px;
   cursor: pointer;
   font-family: var(--font-sans, 'Geist', sans-serif);

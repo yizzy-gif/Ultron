@@ -16,7 +16,7 @@ import policyActiveUrl from './assets/policy-icon-active.svg';
 import automationActiveUrl from './assets/automation-icon-active.svg';
 import {
   UltronPage, MemoryPage, AccountDatabasePage, useUltronStore, ACCOUNT_COLLECTIONS, AgentMark,
-  UltronIdentityCard,
+  UltronIdentityCard, TypingText,
   type UltronSection, type ThreadStatus,
 } from './pages/Ultron';
 import { useHashSync } from './nav/hashSync';
@@ -188,7 +188,9 @@ export default function App() {
             maxVisible: g.id === 'needs_attention' ? 5 : undefined,
             children: g.threads.map(t => ({
               id: t.id,
-              label: t.name,
+              // Cases Ultron just detected on the Live landing type their title
+              // in (the moment of detection); authored cases show it plainly.
+              label: t.id.startsWith('detected_') ? <TypingText text={t.name} /> : t.name,
               // Needs-attention cases carry an orange Pulse mark — a breathing
               // core that flags the case for the user — except while Ultron is
               // still analyzing, which keeps the orbiting mark. Working cases
@@ -246,7 +248,7 @@ export default function App() {
               aria-label="Live — Ultron presence"
               aria-current={onLive ? 'page' : undefined}
             >
-              <UltronIdentityCard />
+              <UltronIdentityCard hideActivity={onLive} />
             </UltronNavCard>
           )
         : undefined}
@@ -282,12 +284,14 @@ export default function App() {
           stageById={ultron.stageById}
           section={homeSection}
           analyzedIds={ultron.analyzedIds}
+          outboundByThread={ultron.outboundByThread}
           selectedId={ultron.selectedId}
           onDecide={ultron.decide}
           onAction={ultron.commit}
           onRefinement={ultron.refine}
           onSaveWorkflow={ultron.saveWorkflow}
           onClose={() => { setHomeView('ultron'); setOnLive(true); }}
+          onDetectRisk={ultron.detectRisk}
         />
       )}
     </AppShell>

@@ -19,13 +19,16 @@ const STATUS_MESSAGES = [
 
 const STATUS_INTERVAL_MS = 2800;
 
-export function UltronIdentityCard() {
+/** `hideActivity` drops the cycling "what Ultron is doing" status line — used on
+ *  the Live landing, where that presence is already shown by the page itself. */
+export function UltronIdentityCard({ hideActivity }: { hideActivity?: boolean }) {
   const [i, setI] = useState(0);
 
   useEffect(() => {
+    if (hideActivity) return;
     const t = setInterval(() => setI(x => (x + 1) % STATUS_MESSAGES.length), STATUS_INTERVAL_MS);
     return () => clearInterval(t);
-  }, []);
+  }, [hideActivity]);
 
   return (
     <Card>
@@ -33,14 +36,16 @@ export function UltronIdentityCard() {
         <AgentMark mark="circle" size={48} tone="auto" state="active" aria-label="Ultron" />
         <TextGroup>
           <Name>Ultron</Name>
-          <Status role="status" aria-live="polite">
-            {/* Text + dots share one keyed line so they slide up + fade in
-                together on each swap; the dots keep their own blink inside. */}
-            <StatusLine key={i}>
-              <StatusText>{STATUS_MESSAGES[i]}</StatusText>
-              <Dots aria-hidden="true"><span>.</span><span>.</span><span>.</span></Dots>
-            </StatusLine>
-          </Status>
+          {!hideActivity && (
+            <Status role="status" aria-live="polite">
+              {/* Text + dots share one keyed line so they slide up + fade in
+                  together on each swap; the dots keep their own blink inside. */}
+              <StatusLine key={i}>
+                <StatusText>{STATUS_MESSAGES[i]}</StatusText>
+                <Dots aria-hidden="true"><span>.</span><span>.</span><span>.</span></Dots>
+              </StatusLine>
+            </Status>
+          )}
         </TextGroup>
       </Content>
     </Card>

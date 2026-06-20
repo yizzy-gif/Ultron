@@ -1227,7 +1227,7 @@ Error generating stack: `+p.message+`
     flex-shrink: 0;
     color: var(--color-success-content);
   }
-`;function p0(n,s){const i=n.status==="needs_approval"||n.status==="recommended",l=i||n.status==="unresolved",c=xd[n.id],u=s===1&&!!c,f=u?c.prompt:Ub[n.id]??n.recommendation,h=u?c.record:Vb[n.id],g=h?Array.isArray(h)?h:[h]:[],y=n.status==="unresolved"?Ab:u?c.actions:n.actions,x=i&&$b(f),_=x?Tb:y[y.length-1],w=x?[]:y.slice(0,-1),L=o0(n);return{needsDecision:i,actionable:l,onFollowUp:u,followUp:c,prompt:f,records:g,primaryLabel:_,secondaryLabels:w,purple:L}}function nf({thread:n,stage:s,expanded:i,detachActionable:l,detachAnalyzing:c,detachTrail:u,onToggle:f,onClose:h,onDecide:g,onAction:y,onRefinement:x,onSaveWorkflow:_}){const[w,L]=v.useState(!1),{actionable:R,prompt:k,records:S,primaryLabel:j,secondaryLabels:b,purple:N}=p0(n,s),P=n.status==="analyzing"&&!c,I=n.status==="resolved"||n.status==="auto_resolved",A=!l&&(R||N),z=l?P||I:R||P||I||A,q=i&&z,K=r0(n),X=Z=>{s0(Z)?x(Z):y(n.id,Z)};return o.jsxs(Uj,{"data-tone":K,$expanded:q,children:[o.jsxs(Zj,{children:[o.jsxs(Yj,{type:"button","aria-expanded":q,"aria-label":q?"Collapse case":"Expand case",onClick:f,children:[o.jsx(Jc,{size:"md",src:i0(n.id),name:Yc[n.id],alt:Yc[n.id]??""}),o.jsxs(Kj,{children:[o.jsx(Qj,{children:Db(n)}),!q&&o.jsx(Xj,{children:Bb(n.id)||n.assessment})]})]}),o.jsx($e,{variant:"ghost",size:"xs",iconOnly:!0,"aria-label":h?"Close case and return to Live":q?"Collapse case":"Expand case",tabIndex:h?void 0:-1,onClick:h??f,children:h?o.jsx(Tc,{size:16}):q?o.jsx(Af,{size:16}):o.jsx(Tc,{size:16})})]}),q&&I&&!u&&o.jsx(Jj,{children:o.jsx(eS,{children:o.jsx(ij,{milestones:l0(n)})})}),q&&z&&o.jsxs(tS,{children:[R&&!l&&o.jsx(Kc,{children:k}),R&&!l&&S.length>0&&o.jsx(m0,{children:S.map((Z,U)=>o.jsx(da,{record:Z},U))}),P&&o.jsx(h0,{role:"status","aria-live":"polite",children:o.jsx(f0,{thread:n,onDecide:g})}),I&&o.jsxs(o.Fragment,{children:[o.jsx(Pb,{thread:n}),ef[n.id]&&o.jsx(da,{record:ef[n.id]})]}),A&&o.jsxs(g0,{children:[R&&j&&o.jsx(ua,{variant:"primary",size:"sm",onClick:()=>X(j),children:j}),R&&b.map(Z=>o.jsx(ua,{variant:"tertiary",size:"sm",onClick:()=>X(Z),children:Z},Z)),R&&o.jsx(v0,{variant:"tertiary",size:"sm",onClick:()=>x("Other"),children:"Other"}),N&&(w?o.jsx($e,{variant:"secondary",size:"sm",leadingArtwork:o.jsx(Kt,{size:14}),trailingArtwork:o.jsx(ld,{size:14}),onClick:()=>_(n),children:"Saved"}):o.jsx($e,{variant:"secondary",size:"sm",leadingArtwork:o.jsx(Eo,{size:14}),onClick:()=>{_(n),L(!0)},children:"Save as workflow"}))]})]})]})}function Oj({thread:n,stage:s,onAction:i,onRefinement:l,onSaveWorkflow:c,onDismiss:u}){const[f,h]=v.useState(!1),{actionable:g,prompt:y,records:x,primaryLabel:_,secondaryLabels:w,purple:L}=p0(n,s),R=k=>{s0(k)?l(k):i(n.id,k)};return o.jsxs(Vj,{"data-tone":r0(n),children:[u&&o.jsx(Gj,{children:o.jsx($e,{variant:"ghost",size:"xs",iconOnly:!0,"aria-label":"Dismiss",onClick:()=>u(n.id),children:o.jsx(Gf,{size:16})})}),g&&o.jsx(Kc,{children:y}),L&&!g&&o.jsx(Kc,{children:"Want me to save this as a reusable workflow?"}),g&&x.length>0&&o.jsx(m0,{children:x.map((k,S)=>o.jsx(da,{record:k},S))}),o.jsxs(g0,{children:[g&&_&&o.jsx(ua,{variant:"primary",size:"sm",onClick:()=>R(_),children:_}),g&&w.map(k=>o.jsx(ua,{variant:"tertiary",size:"sm",onClick:()=>R(k),children:k},k)),g&&o.jsx(v0,{variant:"tertiary",size:"sm",onClick:()=>l("Other"),children:"Other"}),L&&(f?o.jsx($e,{variant:"secondary",size:"sm",leadingArtwork:o.jsx(Kt,{size:14}),trailingArtwork:o.jsx(ld,{size:14}),onClick:()=>c(n),children:"Saved"}):o.jsx($e,{variant:"secondary",size:"sm",leadingArtwork:o.jsx(Eo,{size:14}),onClick:()=>{c(n),h(!0)},children:"Save as workflow"}))]}),o.jsx(qj,{children:"ESC to Skip"})]})}function Bj({steps:n,completed:s}){const[i,l]=v.useState(s?n.length:1);return v.useEffect(()=>{if(s){l(n.length);return}if(i>=n.length)return;const c=setTimeout(()=>l(u=>u+1),1600);return()=>clearTimeout(c)},[i,n.length,s]),o.jsx(aS,{role:"status","aria-live":"polite",children:n.slice(0,i).map((c,u)=>{const f=!s&&u===i-1;return o.jsxs(cS,{children:[o.jsx(dS,{$done:!f,"aria-hidden":"true",children:f?o.jsx(Yt,{mark:"magnetic",size:32,tone:"auto",state:"active",coreHalo:!1,"aria-label":"In progress"}):o.jsx(Kt,{size:12})}),o.jsx(uS,{$done:!f,children:c})]},u)})})}function f0({thread:n,onDecide:s,analyzed:i}){return o.jsxs(o.Fragment,{children:[o.jsxs(nS,{children:[o.jsx(Yt,{mark:"orbit",size:40,tone:"auto",state:i?"idle":"active",coreHalo:!1,"aria-hidden":"true"}),o.jsxs(oS,{children:[o.jsx(sS,{children:i?"Ultron analyzed this event":o.jsxs(o.Fragment,{children:["Ultron is analyzing this event",o.jsxs(hS,{"aria-hidden":"true",children:[o.jsx("span",{children:"."}),o.jsx("span",{children:"."}),o.jsx("span",{children:"."})]})]})}),o.jsx(iS,{children:n.assessment})]})]}),o.jsx(Bj,{steps:Hb(n.id),completed:i}),!i&&o.jsx(pS,{variant:"secondary",size:"sm",onClick:()=>s(n.id),children:"Trigger Needs approval (demo)"})]})}function Dj({thread:n,onDecide:s,analyzed:i}){return o.jsx(rS,{role:"status","aria-live":"polite",children:o.jsx(f0,{thread:n,onDecide:s,analyzed:i})})}function rf(n){return{icon:n.icon,headline:n.headline,blocks:n.detail?[{text:n.detail}]:void 0}}function Fj(n,s){const i=l0(n),l=n.timeline.filter(g=>g.done).length,c=l>0?Math.min(l,i.length):i.length;if(s.length===0)return{items:i.map(g=>({kind:"activity",milestone:g})),reasoningCount:c};const u=xd[n.id],f=[(a0[n.id]??[]).map(rf),((u==null?void 0:u.working)??[]).map(rf)],h=i.slice(0,c).map(g=>({kind:"activity",milestone:g}));return s.forEach((g,y)=>{h.push({kind:"message",text:g}),(f[y]??[]).forEach(x=>h.push({kind:"activity",milestone:x}))}),{items:h,reasoningCount:c}}function Wj({thread:n,outbound:s=[]}){const i=n.status==="in_progress",l=n.status==="resolved"||n.status==="auto_resolved",{items:c,reasoningCount:u}=Fj(n,s),[f,h]=v.useState(u),g=s.length>0||i||l?c.length:u;v.useEffect(()=>{var N;if(f>=g)return;const j=((N=c[f])==null?void 0:N.kind)==="message"?0:c0,b=setTimeout(()=>h(B=>B+1),j);return()=>clearTimeout(b)},[f,g]);const y=c.slice(0,f),x=[];for(const j of y){if(j.kind==="message"){x.push({type:"msg",text:j.text});continue}const b=x[x.length-1];b&&b.type==="acts"?b.milestones.push(j.milestone):x.push({type:"acts",milestones:[j.milestone]})}const _=f<c.length,w=y.length>0&&y[y.length-1].kind==="activity",L=i&&_&&w;let R=-1;x.forEach((j,b)=>{j.type==="acts"&&(R=b)});let k=!1;const S=x.length-1;return o.jsx(o.Fragment,{children:x.map((j,b)=>{if(j.type==="msg")return k=!0,o.jsx(Hj,{messages:[j.text]},`m${b}`);const N=!k&&s.length>0,B=i&&k&&b===S;return o.jsx(aj,{milestones:j.milestones,typingIndex:b===R&&L?j.milestones.length-1:void 0,collapsed:N,workingIndex:B?j.milestones.length-1:void 0},`a${b}`)})})}function Hj({messages:n}){return n.length?o.jsx(mS,{children:n.map((s,i)=>o.jsx(gS,{children:o.jsx(xS,{children:o.jsx(yS,{children:s})})},i))}):null}const Uj=M.div`
+`;function p0(n,s){const i=n.status==="needs_approval"||n.status==="recommended",l=i||n.status==="unresolved",c=xd[n.id],u=s===1&&!!c,f=u?c.prompt:Ub[n.id]??n.recommendation,h=u?c.record:Vb[n.id],g=h?Array.isArray(h)?h:[h]:[],y=n.status==="unresolved"?Ab:u?c.actions:n.actions,x=i&&$b(f),_=x?Tb:y[y.length-1],w=x?[]:y.slice(0,-1),L=o0(n);return{needsDecision:i,actionable:l,onFollowUp:u,followUp:c,prompt:f,records:g,primaryLabel:_,secondaryLabels:w,purple:L}}function nf({thread:n,stage:s,expanded:i,detachActionable:l,detachAnalyzing:c,detachTrail:u,onToggle:f,onClose:h,onDecide:g,onAction:y,onRefinement:x,onSaveWorkflow:_}){const[w,L]=v.useState(!1),{actionable:R,prompt:k,records:S,primaryLabel:j,secondaryLabels:b,purple:N}=p0(n,s),P=n.status==="analyzing"&&!c,I=n.status==="resolved"||n.status==="auto_resolved",A=!l&&(R||N),z=l?P||I:R||P||I||A,q=i&&z,K=r0(n),X=Z=>{s0(Z)?x(Z):y(n.id,Z)};return o.jsxs(Uj,{"data-tone":K,$expanded:q,children:[o.jsxs(Zj,{children:[o.jsxs(Yj,{type:"button","aria-expanded":q,"aria-label":q?"Collapse case":"Expand case",onClick:f,children:[o.jsx(Jc,{size:"md",src:i0(n.id),name:Yc[n.id],alt:Yc[n.id]??""}),o.jsxs(Kj,{children:[o.jsx(Qj,{children:Db(n)}),!q&&o.jsx(Xj,{children:Bb(n.id)||n.assessment})]})]}),o.jsx($e,{variant:"ghost",size:"xs",iconOnly:!0,"aria-label":h?"Close case and return to Live":q?"Collapse case":"Expand case",tabIndex:h?void 0:-1,onClick:h??f,children:h?o.jsx(Tc,{size:16}):q?o.jsx(Af,{size:16}):o.jsx(Tc,{size:16})})]}),q&&I&&!u&&o.jsx(Jj,{children:o.jsx(eS,{children:o.jsx(ij,{milestones:l0(n)})})}),q&&z&&o.jsxs(tS,{children:[R&&!l&&o.jsx(Kc,{children:k}),R&&!l&&S.length>0&&o.jsx(m0,{children:S.map((Z,U)=>o.jsx(da,{record:Z},U))}),P&&o.jsx(h0,{role:"status","aria-live":"polite",children:o.jsx(f0,{thread:n,onDecide:g})}),I&&o.jsxs(o.Fragment,{children:[o.jsx(Pb,{thread:n}),ef[n.id]&&o.jsx(da,{record:ef[n.id]})]}),A&&o.jsxs(g0,{children:[R&&j&&o.jsx(ua,{variant:"primary",size:"sm",onClick:()=>X(j),children:j}),R&&b.map(Z=>o.jsx(ua,{variant:"tertiary",size:"sm",onClick:()=>X(Z),children:Z},Z)),R&&o.jsx(v0,{variant:"tertiary",size:"sm",onClick:()=>x("Other"),children:"Other"}),N&&(w?o.jsx($e,{variant:"secondary",size:"sm",leadingArtwork:o.jsx(Kt,{size:14}),trailingArtwork:o.jsx(ld,{size:14}),onClick:()=>_(n),children:"Saved"}):o.jsx($e,{variant:"secondary",size:"sm",leadingArtwork:o.jsx(Eo,{size:14}),onClick:()=>{_(n),L(!0)},children:"Save as workflow"}))]})]})]})}function Oj({thread:n,stage:s,onAction:i,onRefinement:l,onSaveWorkflow:c,onDismiss:u}){const[f,h]=v.useState(!1),{actionable:g,prompt:y,records:x,primaryLabel:_,secondaryLabels:w,purple:L}=p0(n,s),R=k=>{s0(k)?l(k):i(n.id,k)};return o.jsxs(Vj,{"data-tone":r0(n),children:[u&&o.jsx(Gj,{children:o.jsx($e,{variant:"ghost",size:"xs",iconOnly:!0,"aria-label":"Dismiss",onClick:()=>u(n.id),children:o.jsx(Gf,{size:16})})}),g&&o.jsx(Kc,{children:y}),L&&!g&&o.jsx(Kc,{children:"Want me to save this as a reusable workflow?"}),g&&x.length>0&&o.jsx(m0,{children:x.map((k,S)=>o.jsx(da,{record:k},S))}),o.jsxs(g0,{children:[g&&_&&o.jsx(ua,{variant:"primary",size:"sm",onClick:()=>R(_),children:_}),g&&w.map(k=>o.jsx(ua,{variant:"tertiary",size:"sm",onClick:()=>R(k),children:k},k)),g&&o.jsx(v0,{variant:"tertiary",size:"sm",onClick:()=>l("Other"),children:"Other"}),L&&(f?o.jsx($e,{variant:"secondary",size:"sm",leadingArtwork:o.jsx(Kt,{size:14}),trailingArtwork:o.jsx(ld,{size:14}),onClick:()=>c(n),children:"Saved"}):o.jsx($e,{variant:"secondary",size:"sm",leadingArtwork:o.jsx(Eo,{size:14}),onClick:()=>{c(n),h(!0)},children:"Save as workflow"}))]}),o.jsx(qj,{children:"ESC to Skip"})]})}function Bj({steps:n,completed:s}){const[i,l]=v.useState(s?n.length:1);return v.useEffect(()=>{if(s){l(n.length);return}if(i>=n.length)return;const c=setTimeout(()=>l(u=>u+1),1600);return()=>clearTimeout(c)},[i,n.length,s]),o.jsx(aS,{role:"status","aria-live":"polite",children:n.slice(0,i).map((c,u)=>{const f=!s&&u===i-1;return o.jsxs(cS,{children:[o.jsx(dS,{$done:!f,"aria-hidden":"true",children:f?o.jsx(uS,{children:o.jsx(Yt,{mark:"lines",size:36,tone:"auto",state:"active",motionSpeed:2,coreHalo:!1,"aria-label":"In progress"})}):o.jsx(Kt,{size:12})}),o.jsx(pS,{$done:!f,children:c})]},u)})})}function f0({thread:n,onDecide:s,analyzed:i}){return o.jsxs(o.Fragment,{children:[o.jsxs(nS,{children:[o.jsx(Yt,{mark:"orbit",size:40,tone:"auto",state:i?"idle":"active",coreHalo:!1,"aria-hidden":"true"}),o.jsxs(oS,{children:[o.jsx(sS,{children:i?"Ultron analyzed this event":o.jsxs(o.Fragment,{children:["Ultron is analyzing this event",o.jsxs(mS,{"aria-hidden":"true",children:[o.jsx("span",{children:"."}),o.jsx("span",{children:"."}),o.jsx("span",{children:"."})]})]})}),o.jsx(iS,{children:n.assessment})]})]}),o.jsx(Bj,{steps:Hb(n.id),completed:i}),!i&&o.jsx(fS,{variant:"secondary",size:"sm",onClick:()=>s(n.id),children:"Trigger Needs approval (demo)"})]})}function Dj({thread:n,onDecide:s,analyzed:i}){return o.jsx(rS,{role:"status","aria-live":"polite",children:o.jsx(f0,{thread:n,onDecide:s,analyzed:i})})}function rf(n){return{icon:n.icon,headline:n.headline,blocks:n.detail?[{text:n.detail}]:void 0}}function Fj(n,s){const i=l0(n),l=n.timeline.filter(g=>g.done).length,c=l>0?Math.min(l,i.length):i.length;if(s.length===0)return{items:i.map(g=>({kind:"activity",milestone:g})),reasoningCount:c};const u=xd[n.id],f=[(a0[n.id]??[]).map(rf),((u==null?void 0:u.working)??[]).map(rf)],h=i.slice(0,c).map(g=>({kind:"activity",milestone:g}));return s.forEach((g,y)=>{h.push({kind:"message",text:g}),(f[y]??[]).forEach(x=>h.push({kind:"activity",milestone:x}))}),{items:h,reasoningCount:c}}function Wj({thread:n,outbound:s=[]}){const i=n.status==="in_progress",l=n.status==="resolved"||n.status==="auto_resolved",{items:c,reasoningCount:u}=Fj(n,s),[f,h]=v.useState(u),g=s.length>0||i||l?c.length:u;v.useEffect(()=>{var N;if(f>=g)return;const j=((N=c[f])==null?void 0:N.kind)==="message"?0:c0,b=setTimeout(()=>h(B=>B+1),j);return()=>clearTimeout(b)},[f,g]);const y=c.slice(0,f),x=[];for(const j of y){if(j.kind==="message"){x.push({type:"msg",text:j.text});continue}const b=x[x.length-1];b&&b.type==="acts"?b.milestones.push(j.milestone):x.push({type:"acts",milestones:[j.milestone]})}const _=f<c.length,w=y.length>0&&y[y.length-1].kind==="activity",L=i&&_&&w;let R=-1;x.forEach((j,b)=>{j.type==="acts"&&(R=b)});let k=!1;const S=x.length-1;return o.jsx(o.Fragment,{children:x.map((j,b)=>{if(j.type==="msg")return k=!0,o.jsx(Hj,{messages:[j.text]},`m${b}`);const N=!k&&s.length>0,B=i&&k&&b===S;return o.jsx(aj,{milestones:j.milestones,typingIndex:b===R&&L?j.milestones.length-1:void 0,collapsed:N,workingIndex:B?j.milestones.length-1:void 0},`a${b}`)})})}function Hj({messages:n}){return n.length?o.jsx(gS,{children:n.map((s,i)=>o.jsx(vS,{children:o.jsx(yS,{children:o.jsx(wS,{children:s})})},i))}):null}const Uj=M.div`
   position: relative;
   display: flex;
   flex-direction: column;
@@ -1400,7 +1400,6 @@ Error generating stack: `+p.message+`
   padding: var(--space-4);
   background: var(--color-bg-primary);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-below-md);
 `,oS=M.div`
   display: flex;
   flex-direction: column;
@@ -1421,7 +1420,6 @@ Error generating stack: `+p.message+`
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  margin-left: calc(40px + var(--space-3));
 `,lS=kt`
   from { opacity: 0; transform: translateY(var(--space-2)); }
   to   { opacity: 1; transform: translateY(0); }
@@ -1433,6 +1431,7 @@ Error generating stack: `+p.message+`
 
   @media (prefers-reduced-motion: reduce) { animation: none; }
 `,dS=M.span`
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1441,19 +1440,25 @@ Error generating stack: `+p.message+`
   flex-shrink: 0;
   color: ${n=>n.$done?"var(--color-success-content)":"var(--color-content-tertiary)"};
 `,uS=M.span`
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  pointer-events: none;
+`,pS=M.span`
   font-family: var(--font-sans);
   font-size: var(--text-xs);
   line-height: var(--line-height-relaxed);
   color: ${n=>n.$done?"var(--color-content-tertiary)":"var(--color-content-secondary)"};
-`,pS=M($e)`
+`,fS=M($e)`
   align-self: flex-start;
-  margin-left: calc(40px + var(--space-3));
-`,fS=kt`
+`,hS=kt`
   0%, 100% { opacity: 0.2; }
   50%      { opacity: 1; }
-`,hS=M.span`
+`,mS=M.span`
   & > span {
-    animation: ${fS} 1.2s ease-in-out infinite;
+    animation: ${hS} 1.2s ease-in-out infinite;
   }
   & > span:nth-child(2) { animation-delay: 0.15s; }
   & > span:nth-child(3) { animation-delay: 0.3s; }
@@ -1494,18 +1499,18 @@ Error generating stack: `+p.message+`
   color: var(--color-content-secondary);
   padding-left: var(--space-3);
   padding-right: var(--space-3);
-`,mS=M.div`
+`,gS=M.div`
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   padding-top: var(--space-2);
-`,gS=M.div`
+`,vS=M.div`
   display: flex;
   justify-content: flex-end;
-`,vS=kt`
+`,xS=kt`
   from { opacity: 0; transform: translateY(var(--space-2)); }
   to   { opacity: 1; transform: translateY(0); }
-`,xS=M.div`
+`,yS=M.div`
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -1513,16 +1518,16 @@ Error generating stack: `+p.message+`
   padding: var(--space-2) var(--space-4);
   background: var(--color-bg-inverse-primary);
   border-radius: var(--radius-full);
-  animation: ${vS} var(--duration-base) var(--ease-out);
+  animation: ${xS} var(--duration-base) var(--ease-out);
 
   @media (prefers-reduced-motion: reduce) { animation: none; }
-`,yS=M.span`
+`,wS=M.span`
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   font-weight: var(--font-weight-medium);
   line-height: var(--line-height-relaxed);
   color: var(--color-content-inverse-primary);
-`,of=["Monitoring 142 active shifts","Scanning for coverage risks","Analyzing attendance trends","Optimizing open orders"],wS=2800,_S=200,kS=6,CS=2200,bs=520;function bS({onDetectRisk:n}){const[s,i]=v.useState(0),l=v.useRef(n);l.current=n;const c=v.useRef(new Set),[u,f]=v.useState(!1),h=v.useRef(null);v.useEffect(()=>{const j=setInterval(()=>i(b=>(b+1)%of.length),wS);return()=>clearInterval(j)},[]);const g=Math.min(kS,Ji.length),[y,x]=v.useState([]),_=v.useRef(0),w=v.useRef(Ji.filter(j=>!j.risk)),L=v.useRef(Ji.filter(j=>j.risk)),R=v.useRef({routine:0,risk:0,sinceRisk:0,gap:0}),k=()=>5+Math.floor(Math.random()*5),S=()=>{const j=R.current,b=L.current;if(b.length>0&&j.sinceRisk>=j.gap)return j.sinceRisk=0,j.gap=k(),b[j.risk++%b.length];j.sinceRisk+=1;const N=w.current;return N.length>0?N[j.routine++%N.length]:b[j.risk++%b.length]};return v.useEffect(()=>{if(Ji.length===0){x([]);return}R.current={routine:0,risk:0,sinceRisk:0,gap:k()},_.current=0,x(Array.from({length:g},()=>({key:_.current++,event:S(),phase:"in"})));const j=[],b=setInterval(()=>{var P;const N=S(),B=_.current++;N.risk&&!c.current.has(N.id)&&(c.current.add(N.id),(P=l.current)==null||P.call(l,N)),N.risk&&(f(!0),h.current&&clearTimeout(h.current),h.current=setTimeout(()=>f(!1),2800)),x(I=>{const A=I.filter(K=>K.phase!=="leaving"),z=A.length>=g?A[0].key:null;return[...I.map(K=>K.key===z?{...K,phase:"leaving"}:K),{key:B,event:N,phase:"entering"}]}),j.push(setTimeout(()=>{x(I=>I.map(A=>A.key===B?{...A,phase:"in"}:A))},40)),j.push(setTimeout(()=>{x(I=>I.filter(A=>A.phase!=="leaving"))},bs))},CS);return()=>{clearInterval(b),j.forEach(clearTimeout),h.current&&clearTimeout(h.current)}},[g]),o.jsxs(jS,{children:[o.jsxs(SS,{children:[o.jsx(NS,{children:o.jsx(Yt,{mark:"circle",size:_S,tone:"auto",state:"active",coreGradient:u,"aria-label":"Ultron"})}),o.jsx(LS,{children:"Ultron"}),o.jsx(RS,{role:"status","aria-live":"polite",children:o.jsxs(MS,{children:[o.jsx(IS,{children:of[s]}),o.jsxs($S,{"aria-hidden":"true",children:[o.jsx("span",{children:"."}),o.jsx("span",{children:"."}),o.jsx("span",{children:"."})]})]},s)})]}),y.length>0&&o.jsx(TS,{"aria-label":"Live event feed",children:y.map(j=>o.jsx(zS,{"data-phase":j.phase,"aria-hidden":j.phase==="leaving"||void 0,children:o.jsx(PS,{children:o.jsxs(OS,{"data-risk":j.event.risk||void 0,children:[o.jsxs(BS,{children:[o.jsx(HS,{children:j.event.capability}),o.jsx(US,{children:j.event.title})]}),o.jsx(DS,{children:j.event.risk?o.jsxs(o.Fragment,{children:[o.jsx(Yt,{mark:"pulse",size:28,tone:"auto",state:"active",color:"var(--color-orange-content-tertiary)",coreHalo:!1,"aria-hidden":"true"}),o.jsx(FS,{children:"Risk detected"})]}):o.jsx(WS,{children:"No action required"})})]})})},j.key))})]})}const jS=M.div`
+`,of=["Monitoring 142 active shifts","Scanning for coverage risks","Analyzing attendance trends","Optimizing open orders"],_S=2800,kS=200,CS=6,bS=2200,bs=520;function jS({onDetectRisk:n}){const[s,i]=v.useState(0),l=v.useRef(n);l.current=n;const c=v.useRef(new Set),[u,f]=v.useState(!1),h=v.useRef(null);v.useEffect(()=>{const j=setInterval(()=>i(b=>(b+1)%of.length),_S);return()=>clearInterval(j)},[]);const g=Math.min(CS,Ji.length),[y,x]=v.useState([]),_=v.useRef(0),w=v.useRef(Ji.filter(j=>!j.risk)),L=v.useRef(Ji.filter(j=>j.risk)),R=v.useRef({routine:0,risk:0,sinceRisk:0,gap:0}),k=()=>5+Math.floor(Math.random()*5),S=()=>{const j=R.current,b=L.current;if(b.length>0&&j.sinceRisk>=j.gap)return j.sinceRisk=0,j.gap=k(),b[j.risk++%b.length];j.sinceRisk+=1;const N=w.current;return N.length>0?N[j.routine++%N.length]:b[j.risk++%b.length]};return v.useEffect(()=>{if(Ji.length===0){x([]);return}R.current={routine:0,risk:0,sinceRisk:0,gap:k()},_.current=0,x(Array.from({length:g},()=>({key:_.current++,event:S(),phase:"in"})));const j=[],b=setInterval(()=>{var P;const N=S(),B=_.current++;N.risk&&!c.current.has(N.id)&&(c.current.add(N.id),(P=l.current)==null||P.call(l,N)),N.risk&&(f(!0),h.current&&clearTimeout(h.current),h.current=setTimeout(()=>f(!1),2800)),x(I=>{const A=I.filter(K=>K.phase!=="leaving"),z=A.length>=g?A[0].key:null;return[...I.map(K=>K.key===z?{...K,phase:"leaving"}:K),{key:B,event:N,phase:"entering"}]}),j.push(setTimeout(()=>{x(I=>I.map(A=>A.key===B?{...A,phase:"in"}:A))},40)),j.push(setTimeout(()=>{x(I=>I.filter(A=>A.phase!=="leaving"))},bs))},bS);return()=>{clearInterval(b),j.forEach(clearTimeout),h.current&&clearTimeout(h.current)}},[g]),o.jsxs(SS,{children:[o.jsxs(NS,{children:[o.jsx(LS,{children:o.jsx(Yt,{mark:"circle",size:kS,tone:"auto",state:"active",coreGradient:u,"aria-label":"Ultron"})}),o.jsx(RS,{children:"Ultron"}),o.jsx(ES,{role:"status","aria-live":"polite",children:o.jsxs(IS,{children:[o.jsx(AS,{children:of[s]}),o.jsxs(TS,{"aria-hidden":"true",children:[o.jsx("span",{children:"."}),o.jsx("span",{children:"."}),o.jsx("span",{children:"."})]})]},s)})]}),y.length>0&&o.jsx(zS,{"aria-label":"Live event feed",children:y.map(j=>o.jsx(PS,{"data-phase":j.phase,"aria-hidden":j.phase==="leaving"||void 0,children:o.jsx(OS,{children:o.jsxs(BS,{"data-risk":j.event.risk||void 0,children:[o.jsxs(DS,{children:[o.jsx(US,{children:j.event.capability}),o.jsx(VS,{children:j.event.title})]}),o.jsx(FS,{children:j.event.risk?o.jsxs(o.Fragment,{children:[o.jsx(Yt,{mark:"pulse",size:28,tone:"auto",state:"active",color:"var(--color-orange-content-tertiary)",coreHalo:!1,"aria-hidden":"true"}),o.jsx(WS,{children:"Risk detected"})]}):o.jsx(HS,{children:"No action required"})})]})})},j.key))})]})}const SS=M.div`
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -1536,7 +1541,7 @@ Error generating stack: `+p.message+`
 `,x0=kt`
   from { opacity: 0; transform: translateY(var(--space-5)); }
   to   { opacity: 1; transform: translateY(0); }
-`,SS=M.div`
+`,NS=M.div`
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1546,7 +1551,7 @@ Error generating stack: `+p.message+`
   @media (prefers-reduced-motion: reduce) {
     animation: none;
   }
-`,NS=M.div`
+`,LS=M.div`
   display: grid;
   place-items: center;
   position: relative;
@@ -1576,40 +1581,40 @@ Error generating stack: `+p.message+`
       height: 168px !important;
     }
   }
-`,LS=M.h1`
+`,RS=M.h1`
   margin: 0;
   font-size: var(--text-2xl);
   font-weight: var(--font-weight-semibold);
   letter-spacing: var(--tracking-wide);
   color: var(--color-content-primary);
-`,RS=M.div`
+`,ES=M.div`
   display: flex;
   align-items: baseline;
   justify-content: center;
   min-height: var(--space-4);
-`,ES=kt`
+`,MS=kt`
   from { opacity: 0; transform: translateY(var(--space-2)); }
   to   { opacity: 1; transform: translateY(0); }
-`,MS=M.span`
+`,IS=M.span`
   display: inline-flex;
   align-items: baseline;
-  animation: ${ES} var(--duration-slow) var(--ease-out);
+  animation: ${MS} var(--duration-slow) var(--ease-out);
 
   @media (prefers-reduced-motion: reduce) {
     animation: none;
   }
-`,IS=M.span`
+`,AS=M.span`
   font-size: var(--text-sm);
   color: var(--color-content-tertiary);
-`,AS=kt`
+`,$S=kt`
   0%, 100% { opacity: 0.2; }
   50%      { opacity: 1; }
-`,$S=M.span`
+`,TS=M.span`
   font-size: var(--text-sm);
   color: var(--color-content-tertiary);
 
   & > span {
-    animation: ${AS} 1.2s ease-in-out infinite;
+    animation: ${$S} 1.2s ease-in-out infinite;
   }
   & > span:nth-child(2) { animation-delay: 0.15s; }
   & > span:nth-child(3) { animation-delay: 0.3s; }
@@ -1617,7 +1622,7 @@ Error generating stack: `+p.message+`
   @media (prefers-reduced-motion: reduce) {
     & > span { animation: none; }
   }
-`,TS=M.div`
+`,zS=M.div`
   position: relative;
   flex: 1;
   min-height: 0;
@@ -1637,7 +1642,7 @@ Error generating stack: `+p.message+`
   @media (prefers-reduced-motion: reduce) {
     animation: none;
   }
-`,zS=M.div`
+`,PS=M.div`
   display: grid;
   grid-template-rows: 1fr;
   opacity: 1;
@@ -1666,10 +1671,10 @@ Error generating stack: `+p.message+`
       transform: none;
     }
   }
-`,PS=M.div`
+`,OS=M.div`
   overflow: hidden;
   padding-bottom: var(--space-3);
-`,OS=M.div`
+`,BS=M.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1685,38 +1690,38 @@ Error generating stack: `+p.message+`
   &[data-risk] {
     background: var(--color-orange-bg-tertiary, var(--color-bg-secondary));
   }
-`,BS=M.div`
+`,DS=M.div`
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
-`,DS=M.div`
+`,FS=M.div`
   display: flex;
   align-items: center;
   gap: var(--space-2);
   flex-shrink: 0;
-`,FS=M.span`
+`,WS=M.span`
   margin-left: -12px;
   font-size: var(--text-xs);
   font-weight: var(--font-weight-medium);
   letter-spacing: var(--tracking-wide);
   color: var(--color-orange-content-secondary, var(--color-orange-content-tertiary));
   white-space: nowrap;
-`,WS=M.span`
+`,HS=M.span`
   font-size: var(--text-xs);
   font-weight: var(--font-weight-regular);
   color: var(--color-slate-content-tertiary);
   white-space: nowrap;
-`,HS=M.span`
+`,US=M.span`
   font-size: var(--text-xs);
   font-weight: var(--font-weight-medium);
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
   color: var(--color-slate-content-tertiary);
-`,US=M.span`
+`,VS=M.span`
   font-size: var(--text-sm);
   color: var(--color-slate-content-secondary);
-`,VS={new:["analyzing","needs_approval","recommended"],live:["analyzing","needs_approval","recommended"],working:["in_progress","monitoring"],done:["resolved","auto_resolved","workflow_available","unresolved"]},sf={new:"Nothing new needs your attention right now.",live:"Nothing needs your attention right now.",working:"Ultron isn’t actively working anything right now.",done:"No completed cases yet."},qS=["new","working","done"],GS=280;function ZS({threads:n,stageById:s,section:i,analyzedIds:l,outboundByThread:c,selectedId:u,onDecide:f,onAction:h,onRefinement:g,onSaveWorkflow:y,onClose:x,onDetectRisk:_}){const[w,L]=v.useState(!1),R=()=>{w||(L(!0),window.setTimeout(()=>{L(!1),x()},GS))},k=(U,oe)=>(U.t.status==="analyzing"?1:0)-(oe.t.status==="analyzing"?1:0)||ca[U.t.severity]-ca[oe.t.severity]||U.index-oe.index,S=n.map((U,oe)=>({t:U,index:oe})).filter(({t:U})=>VS[i].includes(U.status)).sort(k).map(({t:U})=>U.id),[j,b]=v.useState(()=>u??null),[N,B]=v.useState([]),P=v.useRef({}),I=v.useRef(void 0);v.useEffect(()=>{var U;if(I.current===void 0){I.current=u;return}!u||u===I.current||(I.current=u,b(u),(U=P.current[u])==null||U.scrollIntoView({behavior:"smooth",block:"start"}))},[u]);const A=qS.includes(i),z=A?u&&S.includes(u)?u:S[0]??null:null,q=z?n.find(U=>U.id===z)??null:null,K=!!q&&(["needs_approval","recommended","unresolved"].includes(q.status)||o0(q)),X=K&&q&&!N.includes(q.id)?q:null,Z=!(K&&q&&["needs_approval","recommended","unresolved"].includes(q.status));return i==="live"?o.jsx(af,{children:o.jsx(bS,{onDetectRisk:_})}):o.jsxs(af,{$closing:w,children:[o.jsx(KS,{children:A?o.jsx(lf,{children:z===null?o.jsx(cf,{role:"status",children:sf[i]}):(()=>{const U=n.find(G=>G.id===z);if(!U)return null;const oe=U.status==="analyzing",ie=!oe&&l.includes(U.id),ae=U.status==="resolved"||U.status==="auto_resolved",Y=U.status==="in_progress",F=U.status==="needs_approval"||U.status==="recommended";return o.jsxs(o.Fragment,{children:[o.jsx(eN,{children:o.jsx(nf,{thread:U,stage:s[U.id]??0,expanded:oe||Y?!1:Z,detachActionable:K,detachAnalyzing:oe,detachTrail:ae,onToggle:()=>{},onClose:R,onDecide:f,onAction:h,onRefinement:g,onSaveWorkflow:y},U.id)}),(oe||ie)&&o.jsx(Dj,{thread:U,onDecide:f,analyzed:ie}),(F||Y||ae)&&o.jsx(Wj,{thread:U,outbound:c[U.id]??[]},U.id)]})})()}):o.jsx(lf,{children:S.length===0?o.jsx(cf,{role:"status",children:sf[i]}):S.map(U=>{const oe=n.find(ie=>ie.id===U);return oe?o.jsx(JS,{ref:ie=>{P.current[U]=ie},children:o.jsx(nf,{thread:oe,stage:s[U]??0,expanded:j===U,onToggle:()=>b(ie=>ie===U?null:U),onDecide:f,onAction:h,onRefinement:g,onSaveWorkflow:y})},U):null})})}),X&&o.jsx(QS,{children:o.jsx(XS,{children:o.jsx(Oj,{thread:X,stage:s[X.id]??0,onAction:h,onRefinement:g,onSaveWorkflow:y,onDismiss:U=>B(oe=>oe.includes(U)?oe:[...oe,U])},X.id)})})]})}const YS=kt`
+`,qS={new:["analyzing","needs_approval","recommended"],live:["analyzing","needs_approval","recommended"],working:["in_progress","monitoring"],done:["resolved","auto_resolved","workflow_available","unresolved"]},sf={new:"Nothing new needs your attention right now.",live:"Nothing needs your attention right now.",working:"Ultron isn’t actively working anything right now.",done:"No completed cases yet."},GS=["new","working","done"],ZS=280;function YS({threads:n,stageById:s,section:i,analyzedIds:l,outboundByThread:c,selectedId:u,onDecide:f,onAction:h,onRefinement:g,onSaveWorkflow:y,onClose:x,onDetectRisk:_}){const[w,L]=v.useState(!1),R=()=>{w||(L(!0),window.setTimeout(()=>{L(!1),x()},ZS))},k=(U,oe)=>(U.t.status==="analyzing"?1:0)-(oe.t.status==="analyzing"?1:0)||ca[U.t.severity]-ca[oe.t.severity]||U.index-oe.index,S=n.map((U,oe)=>({t:U,index:oe})).filter(({t:U})=>qS[i].includes(U.status)).sort(k).map(({t:U})=>U.id),[j,b]=v.useState(()=>u??null),[N,B]=v.useState([]),P=v.useRef({}),I=v.useRef(void 0);v.useEffect(()=>{var U;if(I.current===void 0){I.current=u;return}!u||u===I.current||(I.current=u,b(u),(U=P.current[u])==null||U.scrollIntoView({behavior:"smooth",block:"start"}))},[u]);const A=GS.includes(i),z=A?u&&S.includes(u)?u:S[0]??null:null,q=z?n.find(U=>U.id===z)??null:null,K=!!q&&(["needs_approval","recommended","unresolved"].includes(q.status)||o0(q)),X=K&&q&&!N.includes(q.id)?q:null,Z=!(K&&q&&["needs_approval","recommended","unresolved"].includes(q.status));return i==="live"?o.jsx(af,{children:o.jsx(jS,{onDetectRisk:_})}):o.jsxs(af,{$closing:w,children:[o.jsx(QS,{children:A?o.jsx(lf,{children:z===null?o.jsx(cf,{role:"status",children:sf[i]}):(()=>{const U=n.find(G=>G.id===z);if(!U)return null;const oe=U.status==="analyzing",ie=!oe&&l.includes(U.id),ae=U.status==="resolved"||U.status==="auto_resolved",Y=U.status==="in_progress",F=U.status==="needs_approval"||U.status==="recommended";return o.jsxs(o.Fragment,{children:[o.jsx(tN,{children:o.jsx(nf,{thread:U,stage:s[U.id]??0,expanded:oe||Y?!1:Z,detachActionable:K,detachAnalyzing:oe,detachTrail:ae,onToggle:()=>{},onClose:R,onDecide:f,onAction:h,onRefinement:g,onSaveWorkflow:y},U.id)}),(oe||ie)&&o.jsx(Dj,{thread:U,onDecide:f,analyzed:ie}),(F||Y||ae)&&o.jsx(Wj,{thread:U,outbound:c[U.id]??[]},U.id)]})})()}):o.jsx(lf,{children:S.length===0?o.jsx(cf,{role:"status",children:sf[i]}):S.map(U=>{const oe=n.find(ie=>ie.id===U);return oe?o.jsx(eN,{ref:ie=>{P.current[U]=ie},children:o.jsx(nf,{thread:oe,stage:s[U]??0,expanded:j===U,onToggle:()=>b(ie=>ie===U?null:U),onDecide:f,onAction:h,onRefinement:g,onSaveWorkflow:y})},U):null})})}),X&&o.jsx(XS,{children:o.jsx(JS,{children:o.jsx(Oj,{thread:X,stage:s[X.id]??0,onAction:h,onRefinement:g,onSaveWorkflow:y,onDismiss:U=>B(oe=>oe.includes(U)?oe:[...oe,U])},X.id)})})]})}const KS=kt`
   from { opacity: 1; transform: translateY(0)            scale(1);    }
   to   { opacity: 0; transform: translateY(var(--space-4)) scale(0.98); }
 `,af=M.div`
@@ -1737,13 +1742,13 @@ Error generating stack: `+p.message+`
   will-change: opacity, transform;
 
   ${n=>n.$closing&&fr`
-    animation: ${YS} 280ms var(--ease-out, cubic-bezier(0.4, 0, 0.2, 1)) forwards;
+    animation: ${KS} 280ms var(--ease-out, cubic-bezier(0.4, 0, 0.2, 1)) forwards;
   `}
 
   @media (prefers-reduced-motion: reduce) {
     animation: none;
   }
-`,KS=M.div`
+`,QS=M.div`
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -1766,10 +1771,10 @@ Error generating stack: `+p.message+`
     background: var(--color-border-opaque, #e8eaee);
     border-radius: 99px;
   }
-`,QS=M.div`
+`,XS=M.div`
   flex-shrink: 0;
   padding: var(--space-4) var(--space-5) var(--space-5);
-`,XS=M.div`
+`,JS=M.div`
   max-width: 720px;
   margin: 0 auto;
 `,lf=M.div`
@@ -1779,9 +1784,9 @@ Error generating stack: `+p.message+`
   width: 100%;
   max-width: 720px;
   margin: 0 auto;
-`,JS=M.div`
-  scroll-margin-top: var(--space-5);
 `,eN=M.div`
+  scroll-margin-top: var(--space-5);
+`,tN=M.div`
   position: sticky;
   top: 0;
   z-index: 5;
@@ -1790,51 +1795,51 @@ Error generating stack: `+p.message+`
   text-align: center;
   font-size: var(--text-sm);
   color: var(--color-content-tertiary);
-`,df=["Monitoring 142 active shifts","Scanning for coverage risks","Analyzing attendance trends","Optimizing open orders"],tN=2800;function nN({hideActivity:n}){const[s,i]=v.useState(0);return v.useEffect(()=>{if(n)return;const l=setInterval(()=>i(c=>(c+1)%df.length),tN);return()=>clearInterval(l)},[n]),o.jsx(rN,{children:o.jsxs(oN,{children:[o.jsx(Yt,{mark:"circle",size:48,tone:"auto",state:"active","aria-label":"Ultron"}),o.jsxs(sN,{children:[o.jsx(iN,{children:"Ultron"}),!n&&o.jsx(aN,{role:"status","aria-live":"polite",children:o.jsxs(cN,{children:[o.jsx(dN,{children:df[s]}),o.jsxs(pN,{"aria-hidden":"true",children:[o.jsx("span",{children:"."}),o.jsx("span",{children:"."}),o.jsx("span",{children:"."})]})]},s)})]})]})})}const rN=M.div`
+`,df=["Monitoring 142 active shifts","Scanning for coverage risks","Analyzing attendance trends","Optimizing open orders"],nN=2800;function rN({hideActivity:n}){const[s,i]=v.useState(0);return v.useEffect(()=>{if(n)return;const l=setInterval(()=>i(c=>(c+1)%df.length),nN);return()=>clearInterval(l)},[n]),o.jsx(oN,{children:o.jsxs(sN,{children:[o.jsx(Yt,{mark:"circle",size:48,tone:"auto",state:"active","aria-label":"Ultron"}),o.jsxs(iN,{children:[o.jsx(aN,{children:"Ultron"}),!n&&o.jsx(lN,{role:"status","aria-live":"polite",children:o.jsxs(dN,{children:[o.jsx(uN,{children:df[s]}),o.jsxs(fN,{"aria-hidden":"true",children:[o.jsx("span",{children:"."}),o.jsx("span",{children:"."}),o.jsx("span",{children:"."})]})]},s)})]})]})})}const oN=M.div`
   font-family: var(--font-sans);
-`,oN=M.div`
+`,sN=M.div`
   display: flex;
   align-items: center;
   gap: var(--space-2);
-`,sN=M.div`
+`,iN=M.div`
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
-`,iN=M.span`
+`,aN=M.span`
   min-width: 0;
   font-size: var(--text-lg);
   font-weight: var(--font-weight-semibold);
   letter-spacing: var(--tracking-wide);
   color: var(--color-content-primary);
-`,aN=M.div`
+`,lN=M.div`
   display: flex;
   align-items: baseline;
   min-height: var(--space-4);
-`,lN=kt`
+`,cN=kt`
   from { opacity: 0; transform: translateY(var(--space-2)); }
   to   { opacity: 1; transform: translateY(0); }
-`,cN=M.span`
+`,dN=M.span`
   display: inline-flex;
   align-items: baseline;
   min-width: 0;
-  animation: ${lN} var(--duration-slow) var(--ease-out);
+  animation: ${cN} var(--duration-slow) var(--ease-out);
 
   @media (prefers-reduced-motion: reduce) {
     animation: none;
   }
-`,dN=M.span`
+`,uN=M.span`
   font-size: var(--text-xs);
   color: var(--color-content-tertiary);
-`,uN=kt`
+`,pN=kt`
   0%, 100% { opacity: 0.2; }
   50%      { opacity: 1; }
-`,pN=M.span`
+`,fN=M.span`
   font-size: var(--text-xs);
   color: var(--color-content-tertiary);
 
   & > span {
-    animation: ${uN} 1.2s ease-in-out infinite;
+    animation: ${pN} 1.2s ease-in-out infinite;
   }
   & > span:nth-child(2) { animation-delay: 0.15s; }
   & > span:nth-child(3) { animation-delay: 0.3s; }
@@ -1842,56 +1847,56 @@ Error generating stack: `+p.message+`
   @media (prefers-reduced-motion: reduce) {
     & > span { animation: none; }
   }
-`,fN=45;function hN({text:n,className:s}){const[i,l]=v.useState(0);v.useEffect(()=>{if((()=>{try{return window.matchMedia("(prefers-reduced-motion: reduce)").matches}catch{return!1}})()){l(n.length);return}l(0);let f=0;const h=setInterval(()=>{f+=1,l(f),f>=n.length&&clearInterval(h)},fN);return()=>clearInterval(h)},[n]);const c=i>=n.length;return o.jsxs(mN,{className:s,children:[n.slice(0,i),!c&&o.jsx(vN,{"aria-hidden":"true",children:"|"})]})}const mN=M.span`
+`,hN=45;function mN({text:n,className:s}){const[i,l]=v.useState(0);v.useEffect(()=>{if((()=>{try{return window.matchMedia("(prefers-reduced-motion: reduce)").matches}catch{return!1}})()){l(n.length);return}l(0);let f=0;const h=setInterval(()=>{f+=1,l(f),f>=n.length&&clearInterval(h)},hN);return()=>clearInterval(h)},[n]);const c=i>=n.length;return o.jsxs(gN,{className:s,children:[n.slice(0,i),!c&&o.jsx(xN,{"aria-hidden":"true",children:"|"})]})}const gN=M.span`
   white-space: nowrap;
-`,gN=kt`
+`,vN=kt`
   0%, 100% { opacity: 1; }
   50%      { opacity: 0; }
-`,vN=M.span`
+`,xN=M.span`
   display: inline-block;
   margin-left: 1px;
   font-weight: var(--font-weight-regular);
-  animation: ${gN} 1s steps(1) infinite;
+  animation: ${vN} 1s steps(1) infinite;
 
   @media (prefers-reduced-motion: reduce) {
     display: none;
   }
-`,xN=[{tag:"Pattern",title:"Monday night call-outs spike",detail:"RN call-outs run ~40% higher on Sunday→Monday nights; pre-stage replacements earlier."},{tag:"Worker",title:"Sarah Kim — reliable backfill",detail:"Accepts last-minute RN shifts within commute radius; 94% match on coverage cases."},{tag:"Preference",title:"Notify managers before outreach",detail:"This org prefers a manager heads-up before Ultron contacts replacement candidates."},{tag:"Policy",title:"Overtime ceiling = $4,200/wk",detail:"Rebalance schedules before projected overtime crosses the weekly budget threshold."},{tag:"Workflow",title:"Auto call-out recovery",detail:"Saved from the Maria Lopez case — runs the recovery playbook end-to-end overnight."}];function yN(){return o.jsx(wN,{children:o.jsxs(_N,{children:[o.jsxs(kN,{children:[o.jsx(Yt,{mark:"circle",size:40,tone:"auto",state:"active","aria-label":"Ultron"}),o.jsxs(CN,{children:[o.jsx(bN,{children:"Memory"}),o.jsx(jN,{children:"What Ultron has learned and carries between sessions."})]})]}),o.jsx(SN,{children:xN.map((n,s)=>o.jsxs(NN,{children:[o.jsx(LN,{children:n.tag}),o.jsxs(RN,{children:[o.jsx(EN,{children:n.title}),o.jsx(MN,{children:n.detail})]})]},s))})]})})}const wN=M.div`
+`,yN=[{tag:"Pattern",title:"Monday night call-outs spike",detail:"RN call-outs run ~40% higher on Sunday→Monday nights; pre-stage replacements earlier."},{tag:"Worker",title:"Sarah Kim — reliable backfill",detail:"Accepts last-minute RN shifts within commute radius; 94% match on coverage cases."},{tag:"Preference",title:"Notify managers before outreach",detail:"This org prefers a manager heads-up before Ultron contacts replacement candidates."},{tag:"Policy",title:"Overtime ceiling = $4,200/wk",detail:"Rebalance schedules before projected overtime crosses the weekly budget threshold."},{tag:"Workflow",title:"Auto call-out recovery",detail:"Saved from the Maria Lopez case — runs the recovery playbook end-to-end overnight."}];function wN(){return o.jsx(_N,{children:o.jsxs(kN,{children:[o.jsxs(CN,{children:[o.jsx(Yt,{mark:"circle",size:40,tone:"auto",state:"active","aria-label":"Ultron"}),o.jsxs(bN,{children:[o.jsx(jN,{children:"Memory"}),o.jsx(SN,{children:"What Ultron has learned and carries between sessions."})]})]}),o.jsx(NN,{children:yN.map((n,s)=>o.jsxs(LN,{children:[o.jsx(RN,{children:n.tag}),o.jsxs(EN,{children:[o.jsx(MN,{children:n.title}),o.jsx(IN,{children:n.detail})]})]},s))})]})})}const _N=M.div`
   height: 100%;
   min-height: 0;
   overflow-y: auto;
   padding: var(--space-5);
   font-family: var(--font-sans);
   color: var(--color-content-primary);
-`,_N=M.div`
+`,kN=M.div`
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
   width: 100%;
   max-width: 720px;
   margin: 0 auto;
-`,kN=M.div`
+`,CN=M.div`
   display: flex;
   align-items: center;
   gap: var(--space-3);
-`,CN=M.div`
+`,bN=M.div`
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-`,bN=M.h1`
+`,jN=M.h1`
   margin: 0;
   font-size: var(--text-xl);
   font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-snug);
-`,jN=M.p`
+`,SN=M.p`
   margin: 0;
   font-size: var(--text-sm);
   color: var(--color-content-tertiary);
-`,SN=M.div`
+`,NN=M.div`
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-`,NN=M.div`
+`,LN=M.div`
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
@@ -1899,7 +1904,7 @@ Error generating stack: `+p.message+`
   border: 1px solid var(--color-border-opaque);
   border-radius: var(--radius-lg);
   background: var(--color-bg-primary);
-`,LN=M.span`
+`,RN=M.span`
   flex-shrink: 0;
   padding: 2px var(--space-2);
   border-radius: var(--radius-full);
@@ -1907,16 +1912,16 @@ Error generating stack: `+p.message+`
   color: var(--color-content-secondary);
   font-size: var(--text-xs);
   font-weight: var(--font-weight-medium);
-`,RN=M.div`
+`,EN=M.div`
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
-`,EN=M.span`
+`,MN=M.span`
   font-size: var(--text-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--color-content-primary);
-`,MN=M.span`
+`,IN=M.span`
   font-size: var(--text-sm);
   line-height: var(--line-height-normal);
   color: var(--color-content-secondary);
@@ -1986,7 +1991,7 @@ Error generating stack: `+p.message+`
   margin-bottom: var(--space-1);
 `;M.span`
   color: var(--color-content-secondary);
-`;function IN({collectionId:n}){const s=Qc.find(i=>i.id===n)??Qc[0];return o.jsxs(AN,{children:[o.jsxs($N,{children:[o.jsx(TN,{children:s.label}),o.jsx($s,{children:"Account database"})]}),o.jsxs(zN,{role:"status",children:[o.jsx(PN,{"aria-hidden":"true",children:o.jsx(Df,{size:24})}),o.jsxs(ON,{children:[s.label," — demo stub"]}),o.jsxs(BN,{children:["Connect a data source to browse ",s.label.toLowerCase(),". This Account database surface is a placeholder for the demo."]})]})]})}const AN=M.div`
+`;function AN({collectionId:n}){const s=Qc.find(i=>i.id===n)??Qc[0];return o.jsxs($N,{children:[o.jsxs(TN,{children:[o.jsx(zN,{children:s.label}),o.jsx($s,{children:"Account database"})]}),o.jsxs(PN,{role:"status",children:[o.jsx(ON,{"aria-hidden":"true",children:o.jsx(Df,{size:24})}),o.jsxs(BN,{children:[s.label," — demo stub"]}),o.jsxs(DN,{children:["Connect a data source to browse ",s.label.toLowerCase(),". This Account database surface is a placeholder for the demo."]})]})]})}const $N=M.div`
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
@@ -1999,16 +2004,16 @@ Error generating stack: `+p.message+`
   min-height: 0;
   font-family: var(--font-sans);
   color: var(--color-content-primary);
-`,$N=M.div`
+`,TN=M.div`
   display: flex;
   align-items: center;
   gap: var(--space-3);
-`,TN=M.h1`
+`,zN=M.h1`
   margin: 0;
   font-size: var(--text-2xl);
   font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-tight);
-`,zN=M.div`
+`,PN=M.div`
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2018,7 +2023,7 @@ Error generating stack: `+p.message+`
   border: 1px dashed var(--color-border-opaque);
   border-radius: var(--radius-xl);
   text-align: center;
-`,PN=M.span`
+`,ON=M.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2027,15 +2032,15 @@ Error generating stack: `+p.message+`
   border-radius: var(--radius-full);
   background: var(--color-bg-secondary);
   color: var(--color-content-secondary);
-`,ON=M.div`
+`,BN=M.div`
   font-size: var(--text-base);
   font-weight: var(--font-weight-medium);
   color: var(--color-content-secondary);
-`,BN=M.div`
+`,DN=M.div`
   font-size: var(--text-sm);
   color: var(--color-content-tertiary);
   max-width: 360px;
-`;function DN(n){const s=[n.activeId,n.secActiveId];return n.selectedPersonaId&&s.push("persona",n.selectedPersonaId),n.activePageId&&s.push("page",n.activePageId),"#"+s.map(encodeURIComponent).join("/")}function FN(n){const s=n.replace(/^#/,"").trim();if(!s)return{};const i=s.split("/").map(c=>{try{return decodeURIComponent(c)}catch{return c}}),l={};i[0]&&(l.activeId=i[0]),i[1]&&(l.secActiveId=i[1]);for(let c=2;c<i.length-1;c+=2){const u=i[c],f=i[c+1];u==="persona"?l.selectedPersonaId=f:u==="page"&&(l.activePageId=f)}return l}function WN(n,s){const i=v.useRef("");v.useEffect(()=>{const l=()=>{const u=FN(window.location.hash);u.activeId!==void 0&&s.setActiveId(u.activeId),u.secActiveId!==void 0&&s.setSecActiveId(u.secActiveId),s.setSelectedPersonaId(u.selectedPersonaId??null),s.setActivePageId(u.activePageId??null)};window.location.hash&&l();const c=()=>{window.location.hash!==i.current&&l()};return window.addEventListener("hashchange",c),()=>window.removeEventListener("hashchange",c)},[]),v.useEffect(()=>{const l=DN(n);l!==window.location.hash&&(i.current=l,window.history.replaceState(null,"",l))},[n.activeId,n.secActiveId,n.selectedPersonaId,n.activePageId])}const uf=[{id:"ultron",label:"Ultron",icon:o.jsx(Yt,{mark:"circle",size:32,tone:"auto",state:"idle","aria-label":"Ultron"})},{id:"home",label:"Home",icon:o.jsx(Fk,{})},{id:"engaged",label:"Engaged",icon:o.jsx(Wk,{}),hasUnread:!0},{id:"inbox",label:"Inbox",icon:o.jsx(Hk,{}),hasUnread:!0},{id:"invoice",label:"Invoice",icon:o.jsx(Uk,{})},{id:"ai-home",label:"AI Home",icon:o.jsx(Vk,{})}],pf=[{id:"apps",label:"Apps",icon:o.jsx(qk,{})}],ff=[{id:"docs",label:"Document Studio",icon:o.jsx(Gk,{})},{id:"form",label:"Form",icon:o.jsx(Zk,{})},{id:"tasks",label:"Tasks",icon:o.jsx(Yk,{})},{id:"policy",label:"Policy",icon:o.jsx(Kk,{}),activeIcon:o.jsx("img",{src:kb,width:16,height:16,style:{display:"block"},alt:""})},{id:"automation",label:"Automation",icon:o.jsx(Qk,{}),activeIcon:o.jsx("img",{src:Cb,width:16,height:16,style:{display:"block"},alt:""})},{id:"payroll",label:"Payroll",icon:o.jsx(Xk,{})},{id:"esign",label:"E-Sign Studio",icon:o.jsx(Jk,{})}],HN=M.button`
+`;function FN(n){const s=[n.activeId,n.secActiveId];return n.selectedPersonaId&&s.push("persona",n.selectedPersonaId),n.activePageId&&s.push("page",n.activePageId),"#"+s.map(encodeURIComponent).join("/")}function WN(n){const s=n.replace(/^#/,"").trim();if(!s)return{};const i=s.split("/").map(c=>{try{return decodeURIComponent(c)}catch{return c}}),l={};i[0]&&(l.activeId=i[0]),i[1]&&(l.secActiveId=i[1]);for(let c=2;c<i.length-1;c+=2){const u=i[c],f=i[c+1];u==="persona"?l.selectedPersonaId=f:u==="page"&&(l.activePageId=f)}return l}function HN(n,s){const i=v.useRef("");v.useEffect(()=>{const l=()=>{const u=WN(window.location.hash);u.activeId!==void 0&&s.setActiveId(u.activeId),u.secActiveId!==void 0&&s.setSecActiveId(u.secActiveId),s.setSelectedPersonaId(u.selectedPersonaId??null),s.setActivePageId(u.activePageId??null)};window.location.hash&&l();const c=()=>{window.location.hash!==i.current&&l()};return window.addEventListener("hashchange",c),()=>window.removeEventListener("hashchange",c)},[]),v.useEffect(()=>{const l=FN(n);l!==window.location.hash&&(i.current=l,window.history.replaceState(null,"",l))},[n.activeId,n.secActiveId,n.selectedPersonaId,n.activePageId])}const uf=[{id:"ultron",label:"Ultron",icon:o.jsx(Yt,{mark:"circle",size:32,tone:"auto",state:"idle","aria-label":"Ultron"})},{id:"home",label:"Home",icon:o.jsx(Fk,{})},{id:"engaged",label:"Engaged",icon:o.jsx(Wk,{}),hasUnread:!0},{id:"inbox",label:"Inbox",icon:o.jsx(Hk,{}),hasUnread:!0},{id:"invoice",label:"Invoice",icon:o.jsx(Uk,{})},{id:"ai-home",label:"AI Home",icon:o.jsx(Vk,{})}],pf=[{id:"apps",label:"Apps",icon:o.jsx(qk,{})}],ff=[{id:"docs",label:"Document Studio",icon:o.jsx(Gk,{})},{id:"form",label:"Form",icon:o.jsx(Zk,{})},{id:"tasks",label:"Tasks",icon:o.jsx(Yk,{})},{id:"policy",label:"Policy",icon:o.jsx(Kk,{}),activeIcon:o.jsx("img",{src:kb,width:16,height:16,style:{display:"block"},alt:""})},{id:"automation",label:"Automation",icon:o.jsx(Qk,{}),activeIcon:o.jsx("img",{src:Cb,width:16,height:16,style:{display:"block"},alt:""})},{id:"payroll",label:"Payroll",icon:o.jsx(Xk,{})},{id:"esign",label:"E-Sign Studio",icon:o.jsx(Jk,{})}],UN=M.button`
   display: block;
   width: 100%;
   margin-bottom: var(--space-2);
@@ -2048,4 +2053,4 @@ Error generating stack: `+p.message+`
   transition: background var(--duration-fast, 120ms) var(--ease-out, ease);
 
   &:hover { background: var(--color-bg-secondary, rgba(70, 108, 255, 0.06)); }
-`,UN={needs_attention:o.jsx(ad,{size:16}),live:o.jsx(Yt,{mark:"lines",size:32,tone:"auto",state:"active"}),resolved:o.jsx(pr,{size:16})},VN={analyzing:"new",needs_approval:"new",recommended:"new",in_progress:"working",monitoring:"working",resolved:"done",auto_resolved:"done",workflow_available:"done",unresolved:"done"};function qN(){const[n,s]=v.useState("ultron"),[i,l]=v.useState("home-overview"),[c,u]=v.useState(null),[f,h]=v.useState(null),[g,y]=v.useState("ultron"),[x,_]=v.useState("employees"),w=sj(),[L,R]=v.useState(!0),k=L?"live":w.selectedThread?VN[w.selectedThread.status]:"new";WN({activeId:n,secActiveId:i,selectedPersonaId:c,activePageId:f},{setActiveId:s,setSecActiveId:l,setSelectedPersonaId:u,setActivePageId:h});const S=P=>P.map(I=>({...I,isActive:I.id===n,onClick:I.id==="ultron"?()=>s("ultron"):void 0})),j=[{id:"memory",label:"Memory",icon:o.jsx(Eo,{size:16}),isActive:g==="memory",onClick:()=>y("memory")},{id:"settings",label:"Settings",icon:o.jsx(Tf,{size:16})}],b=o.jsx(e0,{children:g==="memory"?"Memory":g==="account"?"Account database":"Ultron"}),N=g==="account"?Qc.map(P=>({type:"single",item:{id:P.id,label:P.label,icon:P.icon,isActive:x===P.id,onClick:()=>_(P.id)}})):w.groups.flatMap(P=>{const I=P.id==="needs_attention"?"new":P.id==="resolved"?"done":"working",A={type:"group",group:{id:P.id,label:P.id==="needs_attention"?"New":P.label,icon:UN[P.id],trailingBadge:o.jsx($s,{children:P.threads.length}),defaultExpanded:!0,outlined:!1,maxVisible:P.id==="needs_attention"?5:void 0,children:P.threads.map(z=>({id:z.id,label:z.id.startsWith("detected_")?o.jsx(hN,{text:z.name}):z.name,icon:I==="new"?z.status==="analyzing"?o.jsx(Yt,{mark:"orbit",size:32,tone:"auto",state:"active","aria-label":"Analyzing"}):o.jsx(Yt,{mark:"pulse",size:32,tone:"auto",state:"active",color:"var(--color-orange-content-tertiary)","aria-label":"Needs attention"}):I==="working"?o.jsx(Yt,{mark:"lines",size:32,tone:"auto",state:z.status==="in_progress"?"active":"idle","aria-label":"Working"}):o.jsx(Yt,{mark:"pulse",size:32,tone:"auto",state:z.status==="unresolved"?"idle":"static",color:z.status==="unresolved"?"var(--color-orange-content-tertiary)":w.viewedIds.includes(z.id)?"var(--color-slate-content-tertiary)":"var(--color-green-content-tertiary)","aria-label":"Done"}),isActive:g==="ultron"&&!L&&k===I&&w.selectedId===z.id,onClick:()=>{y("ultron"),R(!1),w.setSelectedId(z.id)}}))}};return P.id==="resolved"?[{type:"divider",id:"done-divider"},A]:P.id==="live"?[{type:"divider",id:"working-divider"},A]:[A]}),B=[{id:"main",label:"Workspace",items:S(uf)},{id:"tools",label:"Tools",items:S(pf)},{id:"bottom",label:"Apps",items:S(ff)}];return o.jsx(_b,{items:S(uf),toolItems:S(pf),bottomItems:S(ff),workspace:{id:"acme",name:"{Account.name}",initial:"A"},user:{name:"Tito Goldstein",initials:"TG",avatarColor:"#ee9c2d"},newItemId:"app-tool",aiItemId:"ai-home",secNavHeading:"",menuEntries:N,menuHeader:g==="ultron"?o.jsx(HN,{$active:L,onClick:()=>{y("ultron"),R(!0)},"aria-label":"Live — Ultron presence","aria-current":L?"page":void 0,children:o.jsx(nN,{hideActivity:L})}):void 0,pageEntries:j,showSecondaryNav:!0,showTopNav:g!=="ultron",showSearch:!1,heading:b,actions:[],showActivityButton:!0,showPonderButton:!0,mobileNav:{activeId:n,secActiveId:i,activePageId:f,selectedPersonaId:c,moduleGroups:B,primaryLabel:"Ultron",secondaryLabel:void 0,onMobileNavigate:P=>{P==="ultron"&&s("ultron")},onSelectPersona:u},children:g==="memory"?o.jsx(yN,{}):g==="account"?o.jsx(IN,{collectionId:x}):o.jsx(ZS,{threads:w.threads,stageById:w.stageById,section:k,analyzedIds:w.analyzedIds,outboundByThread:w.outboundByThread,selectedId:w.selectedId,onDecide:w.decide,onAction:w.commit,onRefinement:w.refine,onSaveWorkflow:w.saveWorkflow,onClose:()=>{y("ultron"),R(!0)},onDetectRisk:w.detectRisk})})}_m.createRoot(document.getElementById("root")).render(o.jsx(dr.StrictMode,{children:o.jsx(Hx,{children:o.jsx(qN,{})})}));
+`,VN={needs_attention:o.jsx(ad,{size:16}),live:o.jsx(Yt,{mark:"lines",size:32,tone:"auto",state:"active"}),resolved:o.jsx(pr,{size:16})},qN={analyzing:"new",needs_approval:"new",recommended:"new",in_progress:"working",monitoring:"working",resolved:"done",auto_resolved:"done",workflow_available:"done",unresolved:"done"};function GN(){const[n,s]=v.useState("ultron"),[i,l]=v.useState("home-overview"),[c,u]=v.useState(null),[f,h]=v.useState(null),[g,y]=v.useState("ultron"),[x,_]=v.useState("employees"),w=sj(),[L,R]=v.useState(!0),k=L?"live":w.selectedThread?qN[w.selectedThread.status]:"new";HN({activeId:n,secActiveId:i,selectedPersonaId:c,activePageId:f},{setActiveId:s,setSecActiveId:l,setSelectedPersonaId:u,setActivePageId:h});const S=P=>P.map(I=>({...I,isActive:I.id===n,onClick:I.id==="ultron"?()=>s("ultron"):void 0})),j=[{id:"memory",label:"Memory",icon:o.jsx(Eo,{size:16}),isActive:g==="memory",onClick:()=>y("memory")},{id:"settings",label:"Settings",icon:o.jsx(Tf,{size:16})}],b=o.jsx(e0,{children:g==="memory"?"Memory":g==="account"?"Account database":"Ultron"}),N=g==="account"?Qc.map(P=>({type:"single",item:{id:P.id,label:P.label,icon:P.icon,isActive:x===P.id,onClick:()=>_(P.id)}})):w.groups.flatMap(P=>{const I=P.id==="needs_attention"?"new":P.id==="resolved"?"done":"working",A={type:"group",group:{id:P.id,label:P.id==="needs_attention"?"New":P.label,icon:VN[P.id],trailingBadge:o.jsx($s,{children:P.threads.length}),defaultExpanded:!0,outlined:!1,maxVisible:P.id==="needs_attention"?5:void 0,children:P.threads.map(z=>({id:z.id,label:z.id.startsWith("detected_")?o.jsx(mN,{text:z.name}):z.name,icon:I==="new"?z.status==="analyzing"?o.jsx(Yt,{mark:"orbit",size:32,tone:"auto",state:"active","aria-label":"Analyzing"}):o.jsx(Yt,{mark:"pulse",size:32,tone:"auto",state:"active",color:"var(--color-orange-content-tertiary)","aria-label":"Needs attention"}):I==="working"?o.jsx(Yt,{mark:"lines",size:32,tone:"auto",state:z.status==="in_progress"?"active":"idle","aria-label":"Working"}):o.jsx(Yt,{mark:"pulse",size:32,tone:"auto",state:z.status==="unresolved"?"idle":"static",color:z.status==="unresolved"?"var(--color-orange-content-tertiary)":w.viewedIds.includes(z.id)?"var(--color-slate-content-tertiary)":"var(--color-green-content-tertiary)","aria-label":"Done"}),isActive:g==="ultron"&&!L&&k===I&&w.selectedId===z.id,onClick:()=>{y("ultron"),R(!1),w.setSelectedId(z.id)}}))}};return P.id==="resolved"?[{type:"divider",id:"done-divider"},A]:P.id==="live"?[{type:"divider",id:"working-divider"},A]:[A]}),B=[{id:"main",label:"Workspace",items:S(uf)},{id:"tools",label:"Tools",items:S(pf)},{id:"bottom",label:"Apps",items:S(ff)}];return o.jsx(_b,{items:S(uf),toolItems:S(pf),bottomItems:S(ff),workspace:{id:"acme",name:"{Account.name}",initial:"A"},user:{name:"Tito Goldstein",initials:"TG",avatarColor:"#ee9c2d"},newItemId:"app-tool",aiItemId:"ai-home",secNavHeading:"",menuEntries:N,menuHeader:g==="ultron"?o.jsx(UN,{$active:L,onClick:()=>{y("ultron"),R(!0)},"aria-label":"Live — Ultron presence","aria-current":L?"page":void 0,children:o.jsx(rN,{hideActivity:L})}):void 0,pageEntries:j,showSecondaryNav:!0,showTopNav:g!=="ultron",showSearch:!1,heading:b,actions:[],showActivityButton:!0,showPonderButton:!0,mobileNav:{activeId:n,secActiveId:i,activePageId:f,selectedPersonaId:c,moduleGroups:B,primaryLabel:"Ultron",secondaryLabel:void 0,onMobileNavigate:P=>{P==="ultron"&&s("ultron")},onSelectPersona:u},children:g==="memory"?o.jsx(wN,{}):g==="account"?o.jsx(AN,{collectionId:x}):o.jsx(YS,{threads:w.threads,stageById:w.stageById,section:k,analyzedIds:w.analyzedIds,outboundByThread:w.outboundByThread,selectedId:w.selectedId,onDecide:w.decide,onAction:w.commit,onRefinement:w.refine,onSaveWorkflow:w.saveWorkflow,onClose:()=>{y("ultron"),R(!0)},onDetectRisk:w.detectRisk})})}_m.createRoot(document.getElementById("root")).render(o.jsx(dr.StrictMode,{children:o.jsx(Hx,{children:o.jsx(GN,{})})}));

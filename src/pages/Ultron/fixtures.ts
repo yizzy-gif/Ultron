@@ -938,6 +938,24 @@ export function activityForThread(thread: ThreadItem): ActivityMilestone[] {
     });
 }
 
+/** The tools, skills, and data sources an activity drew on — surfaced under each
+ *  activity on demand. Keyed by the activity's icon (its kind) so every activity
+ *  carries a plausible, relevant set without per-milestone authoring. */
+export interface ActivityUsage { tools: string[]; skills: string[]; data: string[]; }
+
+const USAGE_BY_ICON: Record<WorkingIcon, ActivityUsage> = {
+  send:  { tools: ['Messaging', 'Push notifications'], skills: ['Outreach drafting', 'Recipient targeting'], data: ['Worker contacts', 'Shift details'] },
+  clock: { tools: ['Schedule API', 'Time clock'],      skills: ['Shift monitoring'],                         data: ['Shift records', 'Punch history'] },
+  done:  { tools: ['Schedule API'],                    skills: ['Shift assignment'],                         data: ['Shift records', 'Worker profiles'] },
+  rate:  { tools: ['Pay engine'],                      skills: ['Rate optimization'],                        data: ['Pay rates', 'Budget headroom'] },
+  chart: { tools: ['Analytics engine'],                skills: ['Demand forecasting', 'Scenario modeling'],  data: ['Historical fills', 'Staffing levels'] },
+  edit:  { tools: ['Schedule API'],                    skills: ['Candidate ranking'],                        data: ['Worker profiles', 'Availability'] },
+  alert: { tools: ['Policy engine'],                   skills: ['Risk assessment'],                          data: ['Policy rules', 'Staffing minimums'] },
+};
+
+/** The tools / skills / data an activity used, derived from its icon (kind). */
+export const activityUsage = (icon: WorkingIcon): ActivityUsage => USAGE_BY_ICON[icon] ?? USAGE_BY_ICON.clock;
+
 // ── Live landing — incoming signal stream ──────────────────────────────────
 // The Live landing feed is a conveyor of incoming operational signals Ultron is
 // watching. Each carries a trailing identifier: most are routine ("No action

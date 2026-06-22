@@ -99,6 +99,10 @@ export function UltronPage({
   const [dismissedDockIds, setDismissedDockIds] = useState<string[]>([]);
 
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  // The scroll viewport and its feed content — used to follow the stream: as new
+  // activities/messages appear, keep the latest in view (above the docked prompt).
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   // The last selection we scrolled to. Seeded on first run with the initial
   // selection so the feed opens at the top (the Ultron identity card — the
   // entry point) instead of jumping to the default case. Comparing values
@@ -123,6 +127,36 @@ export function UltronPage({
   const pagedCurrentId = paged
     ? (selectedId && ids.includes(selectedId) ? selectedId : ids[0] ?? null)
     : null;
+
+  // Follow the stream: as the thread grows (a new activity reveals or the
+  // operator's message lands), keep the latest entry in view so the prompt dock
+  // never hides it. Only auto-follows when the operator is already near the
+  // bottom — if they've scrolled up to read, we leave their position alone.
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    const content = contentRef.current;
+    if (!scroller || !content) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const behavior: ScrollBehavior = reduce ? 'auto' : 'smooth';
+    // px from the bottom within which we consider the operator "following along".
+    const NEAR = 160;
+    let stick = true;
+    let prevH = scroller.scrollHeight;
+    const onScroll = () => {
+      stick = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= NEAR;
+    };
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    // Only chase the bottom when the content actually grew — not on a reflow
+    // (e.g. expanding a usage panel) or the initial layout, so opening a case
+    // still lands at the top with the event card in view.
+    const ro = new ResizeObserver(() => {
+      const h = scroller.scrollHeight;
+      if (h > prevH + 1 && stick) scroller.scrollTo({ top: h, behavior });
+      prevH = h;
+    });
+    ro.observe(content);
+    return () => { scroller.removeEventListener('scroll', onScroll); ro.disconnect(); };
+  }, [pagedCurrentId, section]);
 
   // On a paged page, the decision surface (prompt + buttons) is detached from
   // the event card and docked at the page bottom. Only cases that actually need
@@ -153,11 +187,11 @@ export function UltronPage({
 
   return (
     <Page $closing={closing}>
-      <Scroll>
+      <Scroll ref={scrollRef}>
       {/* The Ultron identity now lives at the top of the secondary nav (see
           App's menuHeader); the feed scrolls cases directly. */}
       {paged ? (
-        <Feed>
+        <Feed ref={contentRef}>
           {pagedCurrentId === null ? (
             <Empty role="status">{EMPTY_COPY[section]}</Empty>
           ) : (() => {
@@ -222,7 +256,7 @@ export function UltronPage({
           })()}
         </Feed>
       ) : (
-        <Feed>
+        <Feed ref={contentRef}>
           {ids.length === 0 ? (
             <Empty role="status">{EMPTY_COPY[section]}</Empty>
           ) : (
@@ -317,15 +351,13 @@ const Scroll = styled.div`
   padding: var(--space-5);
   scrollbar-gutter: stable;
 
-  /* Soft top + bottom dissolve so thread content fades as it scrolls in and out
-     (works whether or not the decision dock sits below). The TOP fade is sized
-     to the scroll padding (--space-5) so it dissolves content peeking above the
-     pinned event card while leaving the card itself — which sticks at that same
-     padding edge — crisp. The BOTTOM fade dissolves content above the dock /
-     page foot. */
+  /* Bottom dissolve so thread content fades into the dock / page foot as it
+     scrolls out. The top stays solid: the pinned event card's bg-primary panel
+     (see StickyEvent) now covers the space above it, so content scrolling up
+     disappears behind that surface rather than needing a top fade. */
   --scroll-fade: var(--space-12);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--space-5), #000 calc(100% - var(--scroll-fade)), transparent 100%);
-          mask-image: linear-gradient(to bottom, transparent 0, #000 var(--space-5), #000 calc(100% - var(--scroll-fade)), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - var(--scroll-fade)), transparent 100%);
+          mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - var(--scroll-fade)), transparent 100%);
 
   &::-webkit-scrollbar { width: 6px; }
   &::-webkit-scrollbar-track { background: transparent; }
@@ -347,7 +379,10 @@ const ActionDockInner = styled.div`
   margin: 0 auto;
 `;
 
-/* Vertical feed column — centered, comfortable reading width. */
+/* Vertical feed column — centered, comfortable reading width. A small bottom
+   padding (on top of the scroller's own --space-5) lifts the last activity/message
+   clear of the bottom fade so the newest entry stays readable rather than
+   dissolving into the docked prompt. */
 const Feed = styled.div`
   display: flex;
   flex-direction: column;
@@ -355,6 +390,7 @@ const Feed = styled.div`
   width: 100%;
   max-width: 720px;
   margin: 0 auto;
+  padding-bottom: var(--space-4);
 `;
 
 /* Anchor for scroll-into-view; scroll-margin keeps the card clear of the top
@@ -369,6 +405,34 @@ const StickyEvent = styled.div`
   position: sticky;
   top: 0;
   z-index: 5;
+  background: var(--color-bg-primary);
+
+  /* Extend that surface up through the scroll's top padding so the pinned card
+     reads as a solid header panel and content scrolls away behind it rather than
+     through the gap above. */
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: var(--space-5);
+    background: var(--color-bg-primary);
+  }
+
+  /* Soft gradient just below the pinned card so content scrolling up dissolves
+     into the page background instead of colliding with the card's bottom edge.
+     Rides with the sticky card and sits above the scrolling content. */
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: var(--space-6);
+    background: linear-gradient(to bottom, var(--color-bg-primary), transparent);
+    pointer-events: none;
+  }
 `;
 
 const Empty = styled.div`

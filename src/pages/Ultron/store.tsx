@@ -5,7 +5,6 @@
    ───────────────────────────────────────────────────────────────────────────── */
 
 import { useMemo, useReducer, useState } from 'react';
-import { useToast } from 'alloy-design-system';
 import { ultronThreads, RESOLVE_OUTCOMES, THREAD_FOLLOWUPS, WORKING_ACTIVITIES, spawnThreadFromEvent } from './fixtures';
 import type { IncomingEvent } from './fixtures';
 import type { ThreadItem, ThreadStatus } from './types';
@@ -118,7 +117,6 @@ export interface UltronStore {
 
 export function useUltronStore(): UltronStore {
   const [threads, dispatch] = useReducer(reducer, ultronThreads);
-  const { toast } = useToast();
 
   // Default selection: the first thread that needs attention.
   const [selectedId, setSelectedIdRaw] = useState<string | null>(() => {
@@ -146,12 +144,13 @@ export function useUltronStore(): UltronStore {
       // card travels Needs attention → Working → Done, or back for a follow-up).
       threads: indexed
         .filter(x => g.statuses.includes(x.item.status))
-        // Freshly-detected cases float to the very top, then needs-attention
-        // cases above still-analyzing ones, then severity-first, then authored
-        // recency (ascending fixture index).
+        // Consistent rule (shared with the paged feed): needs-attention cases
+        // always sit ABOVE still-analyzing ones. Within the analyzing block a
+        // freshly-detected case floats to the top; then severity-first, then
+        // authored recency (ascending fixture index).
         .sort((a, b) =>
-          ((isDetected(b.item) ? 1 : 0) - (isDetected(a.item) ? 1 : 0)) ||
           ((a.item.status === 'analyzing' ? 1 : 0) - (b.item.status === 'analyzing' ? 1 : 0)) ||
+          ((isDetected(b.item) ? 1 : 0) - (isDetected(a.item) ? 1 : 0)) ||
           (SEVERITY_RANK[a.item.severity] - SEVERITY_RANK[b.item.severity]) || (a.index - b.index))
         .map(x => x.item),
     }));
@@ -176,10 +175,6 @@ export function useUltronStore(): UltronStore {
   // sidebar). The user stays on the Live landing; the New badge ticks up.
   const detectRisk = (event: IncomingEvent) => {
     dispatch({ type: 'detect', thread: spawnThreadFromEvent(event) });
-    toast.info('Risk detected', {
-      description: `Ultron opened a case: ${event.name}.`,
-      size: 'lg',
-    });
   };
 
   // DEMO ONLY — simulate Ultron finishing its analysis: flip the case to Needs
@@ -190,10 +185,6 @@ export function useUltronStore(): UltronStore {
     setSelectedId(threadId);
     setAnalyzedIds(prev => (prev.includes(threadId) ? prev : [...prev, threadId]));
     dispatch({ type: 'decide', threadId });
-    toast.info('Ultron finished analyzing', {
-      description: 'A recommendation is ready for your approval.',
-      size: 'lg',
-    });
   };
 
   const commit = (threadId: string, label: string) => {
@@ -226,28 +217,14 @@ export function useUltronStore(): UltronStore {
         // First step done → ask the follow-up question (back to Needs attention).
         setStageById(prev => ({ ...prev, [threadId]: 1 }));
         dispatch({ type: 'reopen', threadId });
-        toast.info('Your input needed', {
-          description: 'Ultron finished the first step and has a follow-up.',
-          size: 'lg',
-        });
       } else {
         dispatch({ type: 'resolve', threadId });
-        toast.success('Resolved', { description: 'Ultron completed the work.', size: 'lg' });
       }
     }, delay);
   };
-  const refine = (label: string) => {
-    toast.info('Refinement coming soon', {
-      description: `“${label}” opens a plan refinement surface — demo stub.`,
-      size: 'lg',
-    });
-  };
-  const saveWorkflow = (thread: ThreadItem) => {
-    toast.success('Saved to workflows — demo stub', {
-      description: thread.workflowOpportunity ?? undefined,
-      size: 'lg',
-    });
-  };
+  // Refinement and save-workflow are demo stubs with no surface yet — no-ops.
+  const refine = (_label: string) => {};
+  const saveWorkflow = (_thread: ThreadItem) => {};
 
   return { threads, groups, selectedId, selectedThread, selectedStage, stageById, viewedIds, analyzedIds, outboundByThread, setSelectedId, detectRisk, decide, commit, refine, saveWorkflow };
 }

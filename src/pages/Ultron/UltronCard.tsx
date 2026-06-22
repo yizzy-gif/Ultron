@@ -7,7 +7,7 @@
    ───────────────────────────────────────────────────────────────────────────── */
 
 import { useEffect, useState } from 'react';
-import styled, { keyframes } from 'styled-components';
+import styled, { keyframes, css } from 'styled-components';
 import {
   Avatar, Button, Save01Icon, MinusIcon, ChevronSelectorVerticalIcon, CheckIcon, LinkExternal01Icon, XCloseIcon,
 } from 'alloy-design-system';
@@ -26,6 +26,11 @@ import {
 import { ACTIVITY_STEP_MS } from './store';
 import { ActivityTrail, ActivityTrailCards } from './ActivityTrail';
 import { AgentMark } from './AgentMark';
+
+/** How soon the first work step appears after the operator's reply — a short
+ *  beat so the response feels acknowledged immediately, before the remaining
+ *  steps pace in at the slower ACTIVITY_STEP_MS cadence. */
+const POST_REPLY_MS = 450;
 
 interface UltronCardProps {
   thread: ThreadItem;
@@ -483,8 +488,14 @@ export function UltronActivityCards({ thread, outbound = [] }: { thread: ThreadI
 
   useEffect(() => {
     if (count >= target) return;
-    // Sent messages pop in immediately; activity cards pace in one at a time.
-    const delay = items[count]?.kind === 'message' ? 0 : ACTIVITY_STEP_MS;
+    const cur = items[count];
+    const prev = items[count - 1];
+    // Sent messages pop in immediately. The first work step right after a reply
+    // lands promptly too — no long dead air after the operator responds — then
+    // the remaining steps pace in at the normal working cadence.
+    const delay = cur?.kind === 'message' ? 0
+      : prev?.kind === 'message' ? POST_REPLY_MS
+      : ACTIVITY_STEP_MS;
     const t = setTimeout(() => setCount(c => c + 1), delay);
     return () => clearTimeout(t);
   }, [count, target]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -519,24 +530,61 @@ export function UltronActivityCards({ thread, outbound = [] }: { thread: ThreadI
   // activity run, not a just-sent message awaiting its first execution card).
   const lastIdx = groups.length - 1;
 
+  // Ultron has caught up with everything available for the current phase (done
+  // streaming the reasoning, the working steps, etc.). When it has — and the case
+  // isn't resolved — its mark rests at the foot of the trail as a "monitoring"
+  // presence, the magnetic form, just below the last completed activity. It stays
+  // there across the wait (operator decision, follow-up) until the case resolves.
+  const atRest = count >= target;
+  const showRestingMark = !resolved && atRest && revealed.length > 0;
+
+  // Keep the resting magnetic mark mounted briefly after activity resumes so it
+  // fades out in place (cross-fading into the gliding lines mark) instead of
+  // blinking off — it stays put through the incoming activity, then transforms.
+  const [restLinger, setRestLinger] = useState(false);
+  useEffect(() => {
+    if (showRestingMark) { setRestLinger(true); return; }
+    if (!restLinger) return;
+    const t = setTimeout(() => setRestLinger(false), 420);
+    return () => clearTimeout(t);
+  }, [showRestingMark]); // eslint-disable-line react-hooks/exhaustive-deps
+  const renderRestingMark = showRestingMark || restLinger;
+
   return (
     <>
       {groups.map((g, i) => {
         if (g.type === 'msg') { seenMessage = true; return <UltronOutboundMessages key={`m${i}`} messages={[g.text]} />; }
         const isLegacy = !seenMessage && outbound.length > 0;
-        // Its leading icon slot shows the animated agent mark instead of a static
-        // icon while the case is in progress.
+        // Its leading icon slot shows the animated agent mark, gliding down to the
+        // newest step — but only while the working group is actively streaming.
+        // Once it catches up, the in-trail mark gives way to the resting magnetic
+        // mark at the foot of the trail (below).
         const isWorkingGroup = executing && seenMessage && i === lastIdx;
+        const isStreamingGroup = isWorkingGroup && streaming;
+        // Collapse a work group (one that followed a sent message) once it's no
+        // longer the live working group — i.e. Ultron has finished it and moved on
+        // to a response (a follow-up decision or the resolution). It stays expanded
+        // while streaming, then folds to its summary line, reopenable on click.
+        // Pre-action reasoning still collapses via isLegacy.
+        // Exception: the final activity group of a resolved (Done) case is its
+        // outcome — no prompt response follows it — so keep it expanded.
+        const isResolvedOutcome = resolved && i === lastActsIdx;
+        const collapsed = !isResolvedOutcome && (isLegacy || (seenMessage && !isWorkingGroup));
         return (
           <ActivityTrailCards
             key={`a${i}`}
             milestones={g.milestones}
             typingIndex={i === lastActsIdx && typingOn ? g.milestones.length - 1 : undefined}
-            collapsed={isLegacy}
-            workingIndex={isWorkingGroup ? g.milestones.length - 1 : undefined}
+            collapsed={collapsed}
+            workingIndex={isStreamingGroup ? g.milestones.length - 1 : undefined}
           />
         );
       })}
+      {renderRestingMark && (
+        <RestingMark role="img" aria-label="Ultron monitoring" $leaving={!showRestingMark}>
+          <AgentMark mark="magnetic" size={36} tone="auto" state="active" motionSpeed={1.2} coreHalo={false} aria-hidden="true" />
+        </RestingMark>
+      )}
     </>
   );
 }
@@ -841,7 +889,7 @@ const streamIn = keyframes`
 const StreamRow = styled.div`
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   animation: ${streamIn} var(--duration-base) var(--ease-out);
 
   @media (prefers-reduced-motion: reduce) { animation: none; }
@@ -868,6 +916,36 @@ const WorkingMarkAbs = styled.span`
   transform: translate(-50%, -50%);
   display: inline-flex;
   pointer-events: none;
+`;
+
+/* Resting agent mark — the magnetic form parked at the foot of the trail once
+   Ultron has caught up, marking it as present/monitoring below the last activity.
+   Left-aligned to sit roughly under the trail's icon column. */
+/* Soft fade-up so the magnetic mark cross-fades in as the gliding lines mark
+   fades out above it — no pop. */
+const restingIn = keyframes`
+  from { opacity: 0; transform: translateY(var(--space-2)); }
+  to   { opacity: 1; transform: translateY(0); }
+`;
+
+const RestingMark = styled.div<{ $leaving?: boolean }>`
+  display: flex;
+  align-items: center;
+  /* Nudges the 36px mark so its center lands under the trail's icon column. */
+  padding-left: var(--space-2);
+  pointer-events: none;
+  animation: ${restingIn} 320ms var(--ease-out) both;
+
+  /* On handoff to the working "lines" mark it lingers and fades out in place
+     rather than blinking off — so the magnetic monitoring mark stays through the
+     incoming activity and cross-fades into the gliding lines mark. */
+  ${p => p.$leaving && css`
+    animation: none;
+    opacity: 0;
+    transition: opacity 380ms var(--ease-out);
+  `}
+
+  @media (prefers-reduced-motion: reduce) { animation: none; }
 `;
 
 const StreamText = styled.span<{ $done?: boolean }>`

@@ -5,13 +5,20 @@
    list / labeled check list).
    ───────────────────────────────────────────────────────────────────────────── */
 
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect, type ReactNode } from 'react';
 import styled, { keyframes } from 'styled-components';
-import { CheckIcon, ChevronRightIcon } from 'alloy-design-system';
-import type { ActivityMilestone, RecordRef } from './fixtures';
+import { Button, CheckIcon, ChevronRightIcon } from 'alloy-design-system';
+import type { ActivityMilestone, RecordRef, WorkingIcon } from './fixtures';
+import { activityUsage } from './fixtures';
 import { WORKING_ICON } from './ultronShared';
 import { AgentMark } from './AgentMark';
 import { RecordCard } from './RecordCard';
+
+/* The live agent mark's footprint (36px) and the gap it leaves below the last
+   step when it settles into its resting magnetic state. Used both to position
+   the floating mark (computed transforms) and to reserve room for it. */
+const MARK_PX = 36;
+const REST_GAP_PX = 8; // var(--space-2)
 
 export function ActivityTrail({ milestones }: { milestones: ActivityMilestone[] }) {
   return (
@@ -23,47 +30,168 @@ export function ActivityTrail({ milestones }: { milestones: ActivityMilestone[] 
   );
 }
 
-/** The same milestones, but each step is its own standalone card (no connecting
- *  line), stacked with 8px gaps. Used when the trail is lifted out of the event
- *  card and placed below it.
- *  `revealCount` shows only the first N cards (the rest grow in as they arrive);
- *  `typingIndex` types out that card's headline (the one Ultron is mid-thought
- *  on). The content is identical to the settled trail — it just grows in. */
-export function ActivityTrailCards({ milestones, revealCount, typingIndex, collapsed, workingIndex }: {
+/** A "session": one chunk of Ultron's activity — the run of milestones that
+ *  happened together (the reasoning before a prompt answer, or the work that
+ *  followed one). Rendered as a single collapsible card.
+ *   · collapsed — a one-line summary of the activities it collected.
+ *   · expanded  — every activity in full (icon + headline + sub-context), with
+ *                 no per-activity chevron; the whole session toggles as a unit.
+ *  `typingIndex` types out that activity's headline (the one Ultron is mid-thought
+ *  on); `workingIndex` marks the step the live agent mark currently rides (the
+ *  mark glides down to it as each step completes); `settled` drops the mark just
+ *  below the last step and morphs it into the resting magnetic mark once the work
+ *  is done; `collapsed` starts the session shut (used for reasoning the operator
+ *  has already acted past — the active session streams open). */
+export function ActivityTrailCards({ milestones, typingIndex, collapsed, workingIndex, settled }: {
   milestones: ActivityMilestone[];
-  revealCount?: number;
   typingIndex?: number;
-  /** Collapse these cards' detail blocks (used for the pre-action reasoning once
-   *  the operator has acted). Cards can still be re-opened manually. */
   collapsed?: boolean;
-  /** Index of the step Ultron is actively working — its leading icon slot shows
-   *  the animated agent mark instead of a static icon. */
   workingIndex?: number;
+  settled?: boolean;
 }) {
-  const shown = revealCount != null ? milestones.slice(0, Math.max(0, revealCount)) : milestones;
   return (
-    <CardList>
-      {shown.map((m, i) => (
-        <StepCard key={i} milestone={m} typing={i === typingIndex} collapsed={collapsed} working={i === workingIndex} />
-      ))}
-    </CardList>
+    <ActivitySession
+      milestones={milestones}
+      typingIndex={typingIndex}
+      workingIndex={workingIndex}
+      settled={settled}
+      defaultCollapsed={collapsed}
+    />
   );
 }
 
-function StepCard({ milestone, typing, collapsed, working }: { milestone: ActivityMilestone; typing?: boolean; collapsed?: boolean; working?: boolean }) {
-  // Card layout: the icon rides INLINE in the header next to the title (top row:
-  // icon + title, vertically centered to each other), with the sub-context
-  // blocks hanging indented beneath it — see MilestoneContent's `icon` mode.
+function ActivitySession({ milestones, typingIndex, workingIndex, settled, defaultCollapsed }: {
+  milestones: ActivityMilestone[];
+  typingIndex?: number;
+  workingIndex?: number;
+  settled?: boolean;
+  defaultCollapsed?: boolean;
+}) {
+  const [open, setOpen] = useState(!defaultCollapsed);
+  // Once the operator acts past a session it settles shut — one-way, so they can
+  // still reopen it; the active session stays open as it streams.
+  useEffect(() => { if (defaultCollapsed) setOpen(false); }, [defaultCollapsed]);
+
+  // ── Live agent mark ──
+  // A single persistent mark rides the icon column rather than swapping between
+  // per-step icon slots: it parks over the active step's icon and, because its
+  // position animates, glides down to the next step as each one completes. When
+  // the work settles it leaves the icons behind, dropping just below the last
+  // step where it morphs from the working "lines" mark into a resting "magnetic"
+  // field. We measure the live geometry (icons + last row) so the glide lands
+  // exactly on the icon centers regardless of how tall each step renders.
+  const showMark = open && workingIndex != null;
+  const activeRow = workingIndex ?? -1;
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const iconRefs = useRef<(HTMLElement | null)[]>([]);
+  const rowRefs = useRef<(HTMLElement | null)[]>([]);
+  const [markPos, setMarkPos] = useState<{ x: number; y: number; ready: boolean }>({ x: 0, y: 0, ready: false });
+
+  // Keep the mark mounted briefly after it should hide (the work caught up and
+  // the resting magnetic mark takes over below) so it fades out in place rather
+  // than vanishing — the two cross-fade. It holds its last measured position
+  // while fading since the measure effect bails when showMark is false.
+  const [linger, setLinger] = useState(false);
+  useEffect(() => {
+    if (showMark) { setLinger(true); return; }
+    if (!linger) return;
+    const t = setTimeout(() => setLinger(false), 280);
+    return () => clearTimeout(t);
+  }, [showMark]); // eslint-disable-line react-hooks/exhaustive-deps
+  const renderMark = showMark || linger;
+
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+    if (!body || !showMark) return;
+    const measure = () => {
+      const bRect = body.getBoundingClientRect();
+      const lastIcon = iconRefs.current[milestones.length - 1] ?? iconRefs.current.find(Boolean) ?? null;
+      const refIcon = settled ? lastIcon : iconRefs.current[activeRow];
+      const ic = refIcon?.getBoundingClientRect();
+      // Horizontal: center on the icon column (the same x whether riding a step
+      // or resting below the trail).
+      const x = ic ? ic.left - bRect.left + ic.width / 2 : MARK_PX / 2;
+      // Vertical: the active icon's center, or — when settled — a small gap below
+      // the last step's full height.
+      let y: number;
+      if (settled) {
+        const lr = rowRefs.current[milestones.length - 1]?.getBoundingClientRect();
+        y = (lr ? lr.bottom - bRect.top : 0) + REST_GAP_PX + MARK_PX / 2;
+      } else {
+        y = ic ? ic.top - bRect.top + ic.height / 2 : 0;
+      }
+      setMarkPos({ x, y, ready: true });
+    };
+    measure();
+    // Re-measure when a step expands/collapses or the card reflows, so the glide
+    // (and the resting position) track the live layout.
+    const ro = new ResizeObserver(measure);
+    ro.observe(body);
+    return () => ro.disconnect();
+  }, [showMark, settled, activeRow, milestones.length, open]);
+
+  // The session header is identical whether open or shut: a meta summary of the
+  // activities — how many, and how long Ultron "thought" — plus a trailing
+  // chevron. Toggling only rotates the chevron and reveals/hides the list below.
+  const count = milestones.length;
+  // Synthesised thinking time for the demo, derived deterministically from the
+  // activities so it stays stable across renders (no Math.random).
+  const thinkSecs = count * 6 + (milestones.reduce((s, m) => s + m.headline.length, 0) % 18);
+  const thought = thinkSecs < 60 ? `${thinkSecs} sec` : `${Math.round(thinkSecs / 60)} min`;
+  const summary = `${count} ${count === 1 ? 'activity' : 'activities'} · thought for ${thought}`;
+
   return (
-    <StepCardShell>
-      <MilestoneContent
-        milestone={milestone}
-        last
-        typing={typing}
-        collapsed={collapsed}
-        icon={<MilestoneIcon icon={milestone.icon} working={working} />}
-      />
-    </StepCardShell>
+    <SessionShell>
+      <SessionHeader type="button" aria-expanded={open} onClick={() => setOpen(o => !o)}>
+        <SummaryText>{summary}</SummaryText>
+        <Chevron data-open={open || undefined} aria-hidden="true"><ChevronRightIcon size={14} /></Chevron>
+      </SessionHeader>
+
+      {open && (
+        <SessionBody ref={bodyRef} $reserve={!!settled}>
+          {milestones.map((m, i) => (
+            <RowAnchor key={i} ref={el => { rowRefs.current[i] = el; }}>
+              {i < milestones.length - 1 && <SessionConnector aria-hidden="true" />}
+              <MilestoneContent
+                milestone={m}
+                last
+                collapsible={false}
+                typing={i === typingIndex}
+                icon={
+                  <MilestoneIcon
+                    icon={m.icon}
+                    slotRef={el => { iconRefs.current[i] = el; }}
+                    /* The icon the mark is currently riding hides behind it so it
+                       reappears (as the completed step's icon) once the mark glides on. */
+                    hidden={showMark && !settled && i === activeRow}
+                  />
+                }
+              />
+            </RowAnchor>
+          ))}
+          {renderMark && (
+            <FloatingMark
+              role="img"
+              aria-label={settled ? 'Ultron monitoring' : 'Ultron is working'}
+              style={{
+                transform: `translate(${markPos.x - MARK_PX / 2}px, ${markPos.y - MARK_PX / 2}px)`,
+                opacity: showMark && markPos.ready ? 1 : 0,
+              }}
+            >
+              <AgentMark
+                mark={settled ? 'magnetic' : 'lines'}
+                size={MARK_PX}
+                tone="auto"
+                state="active"
+                motionSpeed={settled ? 1.2 : 2}
+                coreHalo={false}
+                aria-hidden="true"
+              />
+            </FloatingMark>
+          )}
+        </SessionBody>
+      )}
+    </SessionShell>
   );
 }
 
@@ -97,38 +225,33 @@ function BlockRecords({ records, initial = 3 }: { records: RecordRef[]; initial?
   );
 }
 
-function MilestoneIcon({ icon, working }: { icon: ActivityMilestone['icon']; working?: boolean }) {
-  // While Ultron is working this step, the leading icon slot shows the animated
-  // agent mark. It overlays the 16px slot (absolutely centered) so the larger
-  // mark doesn't grow the row or shift the headline.
-  if (working) {
-    return (
-      <WorkingBadge aria-label="Ultron is working" role="img">
-        <WorkingMarkAbs aria-hidden="true">
-          <AgentMark mark="lines" size={36} tone="auto" state="active" motionSpeed={2} coreHalo={false} />
-        </WorkingMarkAbs>
-      </WorkingBadge>
-    );
-  }
+function MilestoneIcon({ icon, slotRef, hidden }: {
+  icon: ActivityMilestone['icon'];
+  slotRef?: (el: HTMLElement | null) => void;
+  hidden?: boolean;
+}) {
+  // The live agent mark is no longer drawn here — it floats over the icon column
+  // (see ActivitySession). `slotRef` lets that mark measure this icon's position
+  // so it can glide onto it; `hidden` keeps the icon's layout while the mark
+  // covers it, so geometry stays measurable.
   const Icon = WORKING_ICON[icon] ?? WORKING_ICON.clock;
-  return <IconBadge aria-hidden="true"><Icon size={16} /></IconBadge>;
+  return <IconBadge ref={slotRef} aria-hidden="true" $hidden={hidden}><Icon size={16} /></IconBadge>;
 }
 
 /** A milestone's headline + (collapsible) detail blocks. Shared by the inline
  *  trail row and the standalone step card. While `typing`, the headline types
  *  out and the detail blocks hold until it finishes — Ultron mid-thought. */
-function MilestoneContent({ milestone, last, typing, collapsed, icon }: { milestone: ActivityMilestone; last?: boolean; typing?: boolean; collapsed?: boolean; icon?: ReactNode }) {
+function MilestoneContent({ milestone, last, typing, icon, collapsible = true }: { milestone: ActivityMilestone; last?: boolean; typing?: boolean; icon?: ReactNode; collapsible?: boolean }) {
   const hasBlocks = !!milestone.blocks?.length;
   const [open, setOpen] = useState(true);
   const [headlineDone, setHeadlineDone] = useState(!typing);
   useEffect(() => { setHeadlineDone(!typing); }, [typing, milestone.headline]);
-  // Collapse the detail when asked (e.g. reasoning that precedes a taken action);
-  // a one-way signal, so the user can still expand it again afterward.
-  useEffect(() => { if (collapsed) setOpen(false); }, [collapsed]);
 
-  // While typing the headline animates and the chevron toggle is inert.
-  const interactive = hasBlocks && !typing;
-  const showBlocks = hasBlocks && open && headlineDone;
+  // Inside a session the activity is never individually collapsible: it shows its
+  // full sub-context with no chevron (the session toggles as a unit). The
+  // connected trail keeps the per-row toggle. While typing, the toggle is inert.
+  const interactive = collapsible && hasBlocks && !typing;
+  const showBlocks = hasBlocks && (collapsible ? open : true) && headlineDone;
 
   return (
     <Content $last={last}>
@@ -174,7 +297,60 @@ function MilestoneContent({ milestone, last, typing, collapsed, icon }: { milest
           ))}
         </Blocks>
       )}
+
+      {/* Card/session layout (icon mode): a per-activity toggle that reveals the
+          tools, skills, and data the activity drew on. Holds until the headline
+          finishes typing so it doesn't pop in mid-thought. */}
+      {icon && headlineDone && <ActivityUsage icon={milestone.icon} />}
     </Content>
+  );
+}
+
+/** A 24px tertiary toggle that shows/hides the tools, skills, and data an
+ *  activity used. Collapsed by default. */
+function ActivityUsage({ icon }: { icon: WorkingIcon }) {
+  const [open, setOpen] = useState(false);
+  const usage = activityUsage(icon);
+  // Label is the per-category counts; a category with nothing used is omitted.
+  const plural = (n: number, s: string) => `${n} ${n === 1 ? s : s + 's'}`;
+  const label = [
+    usage.tools.length ? plural(usage.tools.length, 'tool') : null,
+    usage.skills.length ? plural(usage.skills.length, 'skill') : null,
+    usage.data.length ? `${usage.data.length} data` : null,
+  ].filter(Boolean).join(' · ');
+  if (!label) return null;
+  return (
+    <Usage>
+      <UsageToggle
+        type="button"
+        variant="tertiary"
+        size="xs"
+        aria-expanded={open}
+        trailingArtwork={<UsageChevron data-open={open || undefined}><ChevronRightIcon size={12} /></UsageChevron>}
+        onClick={() => setOpen(o => !o)}
+      >
+        {label}
+      </UsageToggle>
+      {open && (
+        <UsagePanel>
+          <UsageGroup label="Tools" items={usage.tools} />
+          <UsageGroup label="Skills" items={usage.skills} />
+          <UsageGroup label="Data" items={usage.data} />
+        </UsagePanel>
+      )}
+    </Usage>
+  );
+}
+
+function UsageGroup({ label, items }: { label: string; items: string[] }) {
+  if (!items.length) return null;
+  return (
+    <UsageRow>
+      <UsageLabel>{label}</UsageLabel>
+      <UsageChips>
+        {items.map((t, i) => <Chip key={i}>{t}</Chip>)}
+      </UsageChips>
+    </UsageRow>
   );
 }
 
@@ -186,26 +362,119 @@ const Trail = styled.div`
   font-family: var(--font-sans);
 `;
 
-/* Standalone step cards — each milestone in its own card, stacked flush. */
-const CardList = styled.div`
-  display: flex;
-  flex-direction: column;
-  font-family: var(--font-sans);
-`;
-
-/* Each card slides up + fades in as it's revealed, so the trail grows. */
+/* Each session slides up + fades in as it's revealed, so the trail grows. */
 const cardIn = keyframes`
   from { opacity: 0; transform: translateY(var(--space-2)); }
   to   { opacity: 1; transform: translateY(0); }
 `;
 
-const StepCardShell = styled.div`
-  padding: var(--space-4);
+/* A session — one collapsible card holding a run of activities. */
+const SessionShell = styled.div`
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3);
   background: var(--color-bg-primary);
   border-radius: var(--radius-lg);
+  font-family: var(--font-sans);
   animation: ${cardIn} var(--duration-base) var(--ease-out);
 
   @media (prefers-reduced-motion: reduce) { animation: none; }
+`;
+
+/* The session toggle: the one-line summary row, identical whether the session
+   is open or shut — only the chevron rotates and the activity list below it
+   reveals. */
+const SessionHeader = styled.button`
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  box-sizing: border-box;
+  cursor: pointer;
+
+  &:focus-visible {
+    box-shadow: 0 0 0 2px var(--color-border-focus);
+    border-radius: var(--radius-sm);
+  }
+`;
+
+/* Sizes to its content (no flex-grow) so the trailing chevron sits right after
+   the label rather than at the far edge of the row. */
+const SummaryText = styled.span`
+  min-width: 0;
+  text-align: left;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-snug);
+  color: var(--color-content-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+/* Condensed activity stack inside an expanded session. Positioned so the live
+   agent mark can be absolutely placed over the icon column; when the mark settles
+   it rests below the last step, so we reserve room for it (animated, so the trail
+   eases open rather than jumping). */
+const SessionBody = styled.div<{ $reserve?: boolean }>`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  /* space-8 (mark) + space-2 (rest gap), via the same calc the mark box uses. */
+  padding-bottom: ${p => (p.$reserve ? 'calc(var(--space-8) + var(--space-2) + var(--space-1))' : '0')};
+  transition: padding-bottom var(--duration-slow) var(--ease-out);
+
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+`;
+
+/* Wraps each step so the floating mark can measure the step's full extent (to
+   land its resting position just below the last one). */
+const RowAnchor = styled.div`
+  min-width: 0;
+  position: relative;
+`;
+
+/* Dashed vertical line linking one session step's leading icon to the next,
+   running down the icon column and bridging the inter-row gap. Uses the neutral
+   divider stroke so it reads on both light and dark surfaces. Inset top/bottom by
+   space-1 for breathing room. */
+const SessionConnector = styled.span`
+  position: absolute;
+  /* Centered on the 32px icon column. */
+  left: calc(var(--space-8) / 2);
+  top: calc(var(--space-8) + var(--space-1));
+  bottom: calc(var(--space-1) - var(--space-3));
+  width: 0;
+  border-left: 1.5px dashed var(--color-border-opaque);
+  pointer-events: none;
+`;
+
+/* The single live agent mark. Absolutely placed within the session body and
+   moved via a transform that animates, so it glides from step to step and then
+   down to its resting spot. 36px = space-8 + space-1. */
+const FloatingMark = styled.span`
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(var(--space-8) + var(--space-1));
+  height: calc(var(--space-8) + var(--space-1));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  /* Gentle ease-in-out so the glide between steps accelerates and settles
+     smoothly rather than snapping; a softer opacity fade lets it cross-fade with
+     the resting magnetic mark on handoff. */
+  transition: transform 460ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 260ms var(--ease-out);
+  will-change: transform, opacity;
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: opacity 200ms var(--ease-out);
+  }
 `;
 
 /* Types a string out character-by-character with a blinking caret. The full
@@ -270,8 +539,10 @@ const IconCol = styled.div`
 `;
 
 /* 32px leading-icon slot — the icon (16px) centers within it, giving each step
-   a badge-sized icon column that lines up under the header avatar. */
-const IconBadge = styled.span`
+   a badge-sized icon column that lines up under the header avatar. `$hidden`
+   keeps the slot's layout (so the floating mark can still measure it) while the
+   mark visually stands in for it. */
+const IconBadge = styled.span<{ $hidden?: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -279,26 +550,7 @@ const IconBadge = styled.span`
   width: var(--space-8);
   height: var(--space-8);
   color: var(--color-content-secondary);
-`;
-
-/* Working step's leading slot — matches the 32px icon-column footprint (so the
-   headline stays aligned with the other rows) while the larger agent mark is
-   overlaid, absolutely centered, free to spill past the slot. */
-const WorkingBadge = styled.span`
-  position: relative;
-  display: inline-flex;
-  flex-shrink: 0;
-  width: var(--space-8);
-  height: var(--space-8);
-`;
-
-const WorkingMarkAbs = styled.span`
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  display: inline-flex;
-  pointer-events: none;
+  visibility: ${p => (p.$hidden ? 'hidden' : 'visible')};
 `;
 
 /* Dashed vertical line connecting one milestone's icon to the next. Multiply
@@ -322,7 +574,7 @@ const Header = styled.div<{ $interactive?: boolean }>`
   all: unset;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   width: 100%;
   box-sizing: border-box;
   cursor: ${p => (p.$interactive ? 'pointer' : 'default')};
@@ -359,10 +611,10 @@ const Blocks = styled.div<{ $indent?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding-top: var(--space-2);
+  padding-top: var(--space-1);
   /* Card layout: hang the sub-context under the title by clearing the inline
-     icon column (icon width --space-8 + header gap --space-2). */
-  padding-left: ${p => (p.$indent ? 'calc(var(--space-8) + var(--space-2))' : '0')};
+     icon column (icon width --space-8 + header gap --space-3). */
+  padding-left: ${p => (p.$indent ? 'calc(var(--space-8) + var(--space-3))' : '0')};
   animation: ${blocksIn} var(--duration-base) var(--ease-out);
 
   @media (prefers-reduced-motion: reduce) { animation: none; }
@@ -372,6 +624,70 @@ const Block = styled.div`
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+`;
+
+/* Per-activity usage disclosure — sits under the activity's sub-context, hung
+   under the headline (clears the inline icon column like Blocks). */
+const Usage = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  padding-left: calc(var(--space-8) + var(--space-3));
+`;
+
+/* The 24px tertiary toggle. Its left edge lines up with the headline label and
+   sub-context text above it (no negative inset). */
+const UsageToggle = styled(Button)`
+  align-self: flex-start;
+  color: var(--color-content-tertiary);
+`;
+
+/* Trailing chevron — points right, rotates down when the panel is open. */
+const UsageChevron = styled.span`
+  display: inline-flex;
+  transition: transform var(--duration-base) var(--ease-default);
+  &[data-open] { transform: rotate(90deg); }
+`;
+
+const UsagePanel = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  animation: ${blocksIn} var(--duration-base) var(--ease-out);
+
+  @media (prefers-reduced-motion: reduce) { animation: none; }
+`;
+
+const UsageRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+`;
+
+const UsageLabel = styled.span`
+  flex-shrink: 0;
+  width: var(--space-10);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-content-secondary);
+`;
+
+const UsageChips = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+`;
+
+const Chip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-tertiary);
+  font-size: var(--text-xs);
+  line-height: var(--line-height-snug);
+  color: var(--color-content-secondary);
 `;
 
 const BlockText = styled.p`

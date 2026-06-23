@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from 'react';
 import styled, { keyframes, css } from 'styled-components';
 import type { ThreadItem, ThreadStatus } from './types';
 import { SEVERITY_RANK, isPurpleRow } from './ultronShared';
-import { UltronCard, UltronActionCard, UltronAnalyzingCard, UltronActivityCards } from './UltronCard';
+import { UltronCard, UltronActionCard, UltronActivityCards, UltronStepperCard, UltronAnalyzingTrigger } from './UltronCard';
 import { LiveLanding } from './LiveLanding';
 import type { IncomingEvent } from './fixtures';
 
@@ -158,12 +158,35 @@ export function UltronPage({
     return () => { scroller.removeEventListener('scroll', onScroll); ro.disconnect(); };
   }, [pagedCurrentId, section]);
 
+  // Rule: every event page opens anchored at the latest message / activity.
+  // Streaming cases get there via the follow-the-stream chase above, but a case
+  // whose trail is already laid out on open wouldn't trigger that — so here we
+  // jump straight to the bottom on open, revealing the newest entry above the
+  // dock instead of stranding the operator at the top. The event card stays
+  // pinned at the top regardless (sticky).
+  //
+  // The jump is instant (not smooth) and repeated across the first beats: the
+  // trail's candidate avatars load asynchronously and grow its height after the
+  // first paint, so a single jump would land at a stale, too-short bottom.
+  useEffect(() => {
+    if (!paged || !pagedCurrentId) return;
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    const jump = () => scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'auto' });
+    const raf = requestAnimationFrame(jump);
+    const timers = [80, 240, 480].map(ms => window.setTimeout(jump, ms));
+    return () => { cancelAnimationFrame(raf); timers.forEach(clearTimeout); };
+  }, [pagedCurrentId, paged]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // On a paged page, the decision surface (prompt + buttons) is detached from
   // the event card and docked at the page bottom. Only cases that actually need
   // a decision (or can be saved as a workflow) get a dock.
   const pagedThread = pagedCurrentId ? threads.find(t => t.id === pagedCurrentId) ?? null : null;
+  // Every resolved case offers to save its play as a reusable workflow, so it
+  // gets a dock too — even when it carries no explicit workflowOpportunity.
   const dockEligible = !!pagedThread &&
-    (['needs_approval', 'recommended', 'unresolved'].includes(pagedThread.status) || isPurpleRow(pagedThread));
+    (['needs_approval', 'recommended', 'unresolved', 'resolved', 'auto_resolved'].includes(pagedThread.status)
+      || isPurpleRow(pagedThread));
   // The dock can be dismissed per case; once dismissed the prompt card is gone
   // but the event card stays in its docked (collapsed) treatment — the actions
   // don't pop back inline.
@@ -171,9 +194,11 @@ export function UltronPage({
     ? pagedThread : null;
   // When the decision is docked and the event card has no body of its own, the
   // card collapses to a compact summary (title + recommendation, flat tonal bg,
-  // no border). Resolved/settled cases stay expanded to show their outcome.
+  // no border). Resolved/settled cases stay expanded to show their outcome — as
+  // do cases carrying an analysis result, so its white result block can show.
   const eventExpanded = !(dockEligible && pagedThread &&
-    ['needs_approval', 'recommended', 'unresolved'].includes(pagedThread.status));
+    ['needs_approval', 'recommended', 'unresolved'].includes(pagedThread.status))
+    || !!pagedThread?.analysisResult;
 
   // Live — the default landing: Ultron's resting presence, a large Circle
   // identity mark centered in the page (no feed, no dock).
@@ -203,9 +228,6 @@ export function UltronPage({
             // into its own card directly below (the feed gap sets the spacing),
             // leaving the event card as a compact collapsed summary.
             const analyzing = thread.status === 'analyzing';
-            // Once analysis finishes (analyzing → Needs approval) the same card
-            // stays, switched to a completed "Analyzed" summary.
-            const analyzed = !analyzing && analyzedIds.includes(thread.id);
             // Resolved cases lift their activity trail out of the event card into
             // individual per-step cards (8px gaps) placed directly below it.
             const resolved = thread.status === 'resolved' || thread.status === 'auto_resolved';
@@ -220,12 +242,14 @@ export function UltronPage({
               <>
                 {/* The event card pins to the top of the scroll area; the
                     activity cards below scroll underneath it. */}
+                {/* Event card + lifecycle stepper pin together at the top of the
+                    scroll area; the activity cards below scroll underneath them. */}
                 <StickyEvent>
                   <UltronCard
                     key={thread.id}
                     thread={thread}
                     stage={stageById[thread.id] ?? 0}
-                    expanded={analyzing || executing ? false : eventExpanded}
+                    expanded={executing ? false : eventExpanded}
                     detachActionable={dockEligible}
                     detachAnalyzing={analyzing}
                     detachTrail={resolved}
@@ -236,19 +260,21 @@ export function UltronPage({
                     onRefinement={onRefinement}
                     onSaveWorkflow={onSaveWorkflow}
                   />
+                  {/* Lifecycle stepper, lifted out of the event card and pinned
+                      directly below it. */}
+                  <UltronStepperCard thread={thread} stage={stageById[thread.id] ?? 0} />
                 </StickyEvent>
-                {(analyzing || analyzed) && (
-                  <UltronAnalyzingCard thread={thread} onDecide={onDecide} analyzed={analyzed} />
-                )}
-                {/* One accumulating trail across awaiting → executing → resolved.
-                    Keyed by case id so it remounts only when the case changes,
-                    not when the same case advances — so revealed cards persist
-                    and a new action appends rather than clears. */}
-                {(awaitingDecision || executing || resolved) && (
+                {/* One accumulating trail across analyzing → awaiting → executing →
+                    resolved. While analyzing it runs live (the reasoning streams in
+                    with the working mark); the analysis steps are part of the same
+                    group, so there's no separate analyzing card. Keyed by case id so
+                    it remounts only when the case changes, not when it advances. */}
+                {(analyzing || awaitingDecision || executing || resolved) && (
                   <UltronActivityCards
                     key={thread.id}
                     thread={thread}
                     outbound={outboundByThread[thread.id] ?? []}
+                    analyzing={analyzing}
                   />
                 )}
               </>
@@ -297,6 +323,16 @@ export function UltronPage({
               onSaveWorkflow={onSaveWorkflow}
               onDismiss={id => setDismissedDockIds(prev => prev.includes(id) ? prev : [...prev, id])}
             />
+          </ActionDockInner>
+        </ActionDock>
+      )}
+      {/* DEMO ONLY — while a case is analyzing, its "Trigger Needs approval"
+          control docks at the page bottom (mirrors the decision dock) instead of
+          sitting inside the scrolling analyzing card. */}
+      {pagedThread?.status === 'analyzing' && !analyzedIds.includes(pagedThread.id) && (
+        <ActionDock>
+          <ActionDockInner>
+            <UltronAnalyzingTrigger thread={pagedThread} onDecide={onDecide} />
           </ActionDockInner>
         </ActionDock>
       )}
@@ -371,7 +407,7 @@ const Scroll = styled.div`
    bottom), the event card scrolling independently above it. */
 const ActionDock = styled.div`
   flex-shrink: 0;
-  padding: var(--space-4) var(--space-5) var(--space-5);
+  padding: var(--space-6) var(--space-5) var(--space-5);
 `;
 
 const ActionDockInner = styled.div`

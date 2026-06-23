@@ -44,10 +44,23 @@ const FEED_ANIM_MS = 520;
 /** Lifecycle phase of a feed card, driving its CSS transition. */
 type CardPhase = 'entering' | 'in' | 'leaving';
 
+/** What a settled card resolves to, shown in its trailing slot. A card flows in
+ *  showing a progress loader ("coming in"), then — as it moves up — reveals one
+ *  of these:
+ *    · none   — "No action needed" (the calm majority)
+ *    · action — "Action required"  (a nudge: a quiet blue dot)
+ *    · risk   — "Risk detected"    (the hot one: orange Pulse mark; escalates) */
+type CardOutcome = 'none' | 'action' | 'risk';
+
 interface FeedCard {
   key: number;
   event: IncomingEvent;
   phase: CardPhase;
+  /** The trailing identifier this card lands on once it settles. */
+  outcome: CardOutcome;
+  /** While false the trailing slot shows the progress loader (the card is still
+   *  "coming in"); flips true as the card moves up and the outcome is revealed. */
+  resolved: boolean;
 }
 
 interface LiveLandingProps {
@@ -107,49 +120,79 @@ export function LiveLanding({ onDetectRisk }: LiveLandingProps) {
       : risks[s.risk++ % risks.length];
   };
 
+  // The outcome a card lands on, picked when it's created (revealed only once it
+  // moves up). A real risk event always reads "Risk detected"; routine signals
+  // are overwhelmingly "No action needed", with the occasional "Action required"
+  // nudge so the feed isn't a single repeated label.
+  const outcomeFor = (event: IncomingEvent): CardOutcome =>
+    event.risk ? 'risk' : Math.random() < 0.28 ? 'action' : 'none';
+
+  // The card currently sitting at the bottom showing its loader — held in a ref
+  // so the next tick can reveal its outcome (and, if it's a risk, fire the
+  // detection side-effects) as it moves up.
+  const pendingRef = useRef<{ key: number; event: IncomingEvent; outcome: CardOutcome } | null>(null);
+
   useEffect(() => {
     if (INCOMING_EVENTS.length === 0) {
       setCards([]);
       return;
     }
     // Reset the sequencer, then seed a full window already settled in place
-    // (begins mid-gap so the landing opens on routine signals), then run.
+    // (begins mid-gap so the landing opens on routine signals), then run. Every
+    // seeded card has already resolved except the last, which sits at the bottom
+    // showing its loader — so the landing opens mid-conveyor with one signal
+    // still "coming in".
     seqRef.current = { routine: 0, risk: 0, sinceRisk: 0, gap: nextGap() };
     keyRef.current = 0;
-    setCards(
-      Array.from({ length: windowSize }, () => ({
+    const seeded: FeedCard[] = Array.from({ length: windowSize }, () => {
+      const event = nextEvent();
+      return {
         key: keyRef.current++,
-        event: nextEvent(),
+        event,
         phase: 'in' as CardPhase,
-      })),
-    );
+        outcome: outcomeFor(event),
+        resolved: true,
+      };
+    });
+    if (seeded.length > 0) {
+      const last = seeded[seeded.length - 1];
+      last.resolved = false;
+      pendingRef.current = { key: last.key, event: last.event, outcome: last.outcome };
+    } else {
+      pendingRef.current = null;
+    }
+    setCards(seeded);
 
     const timers: ReturnType<typeof setTimeout>[] = [];
     const t = setInterval(() => {
       const event = nextEvent();
       const newKey = keyRef.current++;
+      const outcome = outcomeFor(event);
 
-      // The detection moment: a risk signal entering the feed escalates into a
-      // fresh New case — once per signal.
-      if (event.risk && !detectedRef.current.has(event.id)) {
-        detectedRef.current.add(event.id);
-        onDetectRef.current?.(event);
-      }
-
-      // Every risk surfacing pulses the hero core into its colored alert state.
-      if (event.risk) {
+      // The card that was loading at the bottom is now moving up: reveal its
+      // outcome. A "Risk detected" reveal is the detection moment — it pulses
+      // the hero core and escalates into a fresh New case (once per signal).
+      const resolving = pendingRef.current;
+      if (resolving && resolving.outcome === 'risk') {
         setRiskActive(true);
         if (riskTimerRef.current) clearTimeout(riskTimerRef.current);
         riskTimerRef.current = setTimeout(() => setRiskActive(false), 2800);
+        if (!detectedRef.current.has(resolving.event.id)) {
+          detectedRef.current.add(resolving.event.id);
+          onDetectRef.current?.(resolving.event);
+        }
       }
+      pendingRef.current = { key: newKey, event, outcome };
 
       setCards(prev => {
         const live = prev.filter(c => c.phase !== 'leaving');
         const retireKey = live.length >= windowSize ? live[0].key : null;
-        const updated = prev.map(c =>
-          c.key === retireKey ? { ...c, phase: 'leaving' as CardPhase } : c,
-        );
-        return [...updated, { key: newKey, event, phase: 'entering' as CardPhase }];
+        const updated = prev.map(c => {
+          if (c.key === retireKey) return { ...c, phase: 'leaving' as CardPhase };
+          if (resolving && c.key === resolving.key && !c.resolved) return { ...c, resolved: true };
+          return c;
+        });
+        return [...updated, { key: newKey, event, phase: 'entering' as CardPhase, outcome, resolved: false }];
       });
 
       // Promote the new card to its resting phase shortly after it mounts so
@@ -204,15 +247,19 @@ export function LiveLanding({ onDetectRisk }: LiveLandingProps) {
             // row is collapsed.
             <Row key={c.key} data-phase={c.phase} aria-hidden={c.phase === 'leaving' || undefined}>
               <Clip>
-                <EventCard data-risk={c.event.risk || undefined}>
+                <EventCard data-outcome={c.resolved ? c.outcome : 'pending'}>
                   <EventMain>
                     <EventCap>{c.event.capability}</EventCap>
                     <EventTitle>{c.event.title}</EventTitle>
                   </EventMain>
-                  {/* Trailing identifier — routine signals read "No action
-                      required"; real risks show the orange Pulse mark. */}
+                  {/* Trailing identifier. While the card is coming in it shows an
+                      animated 3-dot loader; once it moves up it resolves to one of
+                      three: "No action needed", "Action required" (blue Pulse
+                      mark), or the orange "Risk detected" Pulse mark. */}
                   <EventTrail>
-                    {c.event.risk ? (
+                    {!c.resolved ? (
+                      <TrailDots role="status" aria-label="Analyzing"><span /><span /><span /></TrailDots>
+                    ) : c.outcome === 'risk' ? (
                       <>
                         <AgentMark
                           mark="pulse"
@@ -225,8 +272,21 @@ export function LiveLanding({ onDetectRisk }: LiveLandingProps) {
                         />
                         <RiskLabel>Risk detected</RiskLabel>
                       </>
+                    ) : c.outcome === 'action' ? (
+                      <>
+                        <AgentMark
+                          mark="pulse"
+                          size={28}
+                          tone="auto"
+                          state="active"
+                          color="var(--color-blue-content-primary, var(--color-slate-content-secondary))"
+                          coreHalo={false}
+                          aria-hidden="true"
+                        />
+                        <ActionLabel>Action required</ActionLabel>
+                      </>
                     ) : (
-                      <NoActionLabel>No action required</NoActionLabel>
+                      <NoActionLabel>No action needed</NoActionLabel>
                     )}
                   </EventTrail>
                 </EventCard>
@@ -460,7 +520,9 @@ const EventCard = styled.div`
 
   &:hover { opacity: 1; }
 
-  &[data-risk] {
+  /* Risk signals carry a faint orange wash once resolved so they read a touch
+     hotter than routine ones (the loader + routine states stay neutral). */
+  &[data-outcome='risk'] {
     background: var(--color-orange-bg-tertiary, var(--color-bg-secondary));
   }
 `;
@@ -481,6 +543,30 @@ const EventTrail = styled.div`
   flex-shrink: 0;
 `;
 
+/* Pending loader — three round dots that blink in sequence. Sized to match the
+   28px height of the resolved Pulse marks and centred in the trail row so the
+   loader sits on the card's vertical midline. */
+const TrailDots = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+
+  & > span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-content-tertiary);
+    animation: ${blink} 1.2s ease-in-out infinite;
+  }
+  & > span:nth-child(2) { animation-delay: 0.15s; }
+  & > span:nth-child(3) { animation-delay: 0.3s; }
+
+  @media (prefers-reduced-motion: reduce) {
+    & > span { animation: none; }
+  }
+`;
+
 /* "Risk detected" — orange, beside the Pulse mark. The Pulse draws a small
    core centred in a 28px canvas, so ~12px of dead space sits between the dot
    and the canvas edge; a negative margin crops it back so the visible gap from
@@ -494,11 +580,24 @@ const RiskLabel = styled.span`
   white-space: nowrap;
 `;
 
-/* "No action required" — quiet/muted for routine signals. */
+/* "No action needed" — quiet/muted for routine signals. */
 const NoActionLabel = styled.span`
   font-size: var(--text-xs);
   font-weight: var(--font-weight-regular);
   color: var(--color-slate-content-tertiary);
+  white-space: nowrap;
+`;
+
+/* "Action required" — a quiet blue nudge beside the same Pulse mark the "Risk
+   detected" row uses, sitting between the calm "No action needed" and the hot
+   orange "Risk detected". The negative margin crops the Pulse canvas dead space
+   so the gap to the label reads as the intended 8px (see RiskLabel). */
+const ActionLabel = styled.span`
+  margin-left: -12px;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-blue-content-primary, var(--color-slate-content-secondary));
   white-space: nowrap;
 `;
 

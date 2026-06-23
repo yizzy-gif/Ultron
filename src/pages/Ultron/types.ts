@@ -44,6 +44,9 @@ export interface ThreadItem {
   event: string;
   /** Ultron's reasoning about the event. */
   assessment: string;
+  /** The one-line conclusion of Ultron's analysis, surfaced in the event card
+   *  while the case awaits a decision (the white result block under the header). */
+  analysisResult?: string;
   /** Ultron's recommended action. */
   recommendation: string;
   /** Populated once the case resolves. */

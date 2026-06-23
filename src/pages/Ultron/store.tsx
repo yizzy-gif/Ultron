@@ -25,8 +25,9 @@ const END_PAD_MS = 1000;
 
 /** How long a thread stays "in progress" (Live stream): the full activity
  *  sequence for that thread, plus a closing beat. Scales with the sequence
- *  length so richer events take longer than simple ones. */
-function workingDurationMs(steps: number): number {
+ *  length so richer events take longer than simple ones. Exported so the event
+ *  card's progress bar can fill in step with the work (and resolve). */
+export function workingDurationMs(steps: number): number {
   return Math.max(steps, 1) * ACTIVITY_STEP_MS + END_PAD_MS;
 }
 

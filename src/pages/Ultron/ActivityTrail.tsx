@@ -7,10 +7,12 @@
 
 import { useState, useEffect, useRef, useLayoutEffect, type ReactNode } from 'react';
 import styled, { keyframes } from 'styled-components';
-import { Button, CheckIcon, ChevronRightIcon } from 'alloy-design-system';
-import type { ActivityMilestone, RecordRef, WorkingIcon } from './fixtures';
-import { activityUsage } from './fixtures';
-import { WORKING_ICON } from './ultronShared';
+import {
+  Button, CheckIcon, ChevronRightIcon,
+  AIMessageActions, ThumbsUpIcon, ThumbsDownIcon, RefreshCw04Icon,
+} from 'alloy-design-system';
+import type { ActivityMilestone, RecordRef, ActivityUsage as ActivityUsageData } from './fixtures';
+import { aggregateUsage } from './fixtures';
 import { AgentMark } from './AgentMark';
 import { RecordCard } from './RecordCard';
 
@@ -85,6 +87,9 @@ function ActivitySession({ milestones, typingIndex, workingIndex, settled, defau
   const bodyRef = useRef<HTMLDivElement>(null);
   const iconRefs = useRef<(HTMLElement | null)[]>([]);
   const rowRefs = useRef<(HTMLElement | null)[]>([]);
+  // The feedback row, when shown — the settled mark rests just below it (rather
+  // than below the last step, which the feedback row now sits under).
+  const actionsRef = useRef<HTMLDivElement>(null);
   const [markPos, setMarkPos] = useState<{ x: number; y: number; ready: boolean }>({ x: 0, y: 0, ready: false });
 
   // Keep the mark mounted briefly after it should hide (the work caught up and
@@ -99,6 +104,18 @@ function ActivitySession({ milestones, typingIndex, workingIndex, settled, defau
     return () => clearTimeout(t);
   }, [showMark]); // eslint-disable-line react-hooks/exhaustive-deps
   const renderMark = showMark || linger;
+
+  // The mark's first appearance should just fade in at its spot — not glide in
+  // from the corner (its pre-measure 0,0 origin). So the gliding transform
+  // transition stays OFF for the initial placement and switches ON one frame
+  // after the mark is first positioned, leaving step-to-step moves animated.
+  const [glide, setGlide] = useState(false);
+  useEffect(() => {
+    if (!renderMark) { setGlide(false); return; }
+    if (!markPos.ready) return;
+    const r = requestAnimationFrame(() => setGlide(true));
+    return () => cancelAnimationFrame(r);
+  }, [renderMark, markPos.ready]);
 
   useLayoutEffect(() => {
     const body = bodyRef.current;
@@ -115,8 +132,12 @@ function ActivitySession({ milestones, typingIndex, workingIndex, settled, defau
       // the last step's full height.
       let y: number;
       if (settled) {
-        const lr = rowRefs.current[milestones.length - 1]?.getBoundingClientRect();
-        y = (lr ? lr.bottom - bRect.top : 0) + REST_GAP_PX + MARK_PX / 2;
+        // Rest just below the trail's full content — beneath the feedback row when
+        // it's present, else the last step — so the mark glides down to the foot in
+        // one continuous move rather than landing on top of the feedback row.
+        const anchor = actionsRef.current ?? rowRefs.current[milestones.length - 1];
+        const ar = anchor?.getBoundingClientRect();
+        y = (ar ? ar.bottom - bRect.top : 0) + REST_GAP_PX + MARK_PX / 2;
       } else {
         y = ic ? ic.top - bRect.top + ic.height / 2 : 0;
       }
@@ -157,6 +178,11 @@ function ActivitySession({ milestones, typingIndex, workingIndex, settled, defau
                 last
                 collapsible={false}
                 typing={i === typingIndex}
+                /* Combined usage for the whole group, shown once under its last
+                   activity — the full set of tools/skills/data Ultron drew on.
+                   Held back until the group finishes (no live mark riding it), so
+                   it appears only after the last activity is done. */
+                usage={i === milestones.length - 1 && (workingIndex == null || settled) ? aggregateUsage(milestones.map(m => m.icon)) : undefined}
                 icon={
                   <MilestoneIcon
                     icon={m.icon}
@@ -169,10 +195,17 @@ function ActivitySession({ milestones, typingIndex, workingIndex, settled, defau
               />
             </RowAnchor>
           ))}
+          {/* Feedback row for the whole group — thumbs up/down, rerun, and a
+              timestamp. Shown once the group is no longer actively streaming (no
+              live mark riding it), so it reads as actions on a finished response. */}
+          {(workingIndex == null || settled) && (
+            <div ref={actionsRef}><SessionActions time={synthClock(milestones)} /></div>
+          )}
           {renderMark && (
             <FloatingMark
               role="img"
               aria-label={settled ? 'Ultron monitoring' : 'Ultron is working'}
+              $glide={glide}
               style={{
                 transform: `translate(${markPos.x - MARK_PX / 2}px, ${markPos.y - MARK_PX / 2}px)`,
                 opacity: showMark && markPos.ready ? 1 : 0,
@@ -192,6 +225,53 @@ function ActivitySession({ milestones, typingIndex, workingIndex, settled, defau
         </SessionBody>
       )}
     </SessionShell>
+  );
+}
+
+/** A deterministic "h:mm AM/PM" clock label for a group, derived from its
+ *  activities so it stays stable across renders (no Date/Math.random in the
+ *  demo). Anchored at 9:41 AM and nudged by the combined headline length. */
+function synthClock(milestones: ActivityMilestone[]): string {
+  const offset = milestones.reduce((s, m) => s + m.headline.length, 0) % 200;
+  const total = 9 * 60 + 41 + offset; // base 9:41 AM
+  const h24 = Math.floor(total / 60) % 24;
+  const min = total % 60;
+  const period = h24 < 12 ? 'AM' : 'PM';
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h12}:${String(min).padStart(2, '0')} ${period}`;
+}
+
+/** The AI action cluster beneath a finished activity group: a thumbs up/down
+ *  rating, a rerun, and a trailing timestamp. The thumbs are a single toggle —
+ *  picking one clears the other, clicking the active one clears it. Local,
+ *  self-contained state (demo feedback only). */
+function SessionActions({ time }: { time: string }) {
+  const [vote, setVote] = useState<'up' | 'down' | null>(null);
+  const toggle = (v: 'up' | 'down') => setVote(c => (c === v ? null : v));
+  return (
+    <ActionsRow>
+      <AIMessageActions visibility="always" time={time}>
+        <RateButton
+          variant="ghost" size="xs" iconOnly
+          aria-label="Good response" aria-pressed={vote === 'up'}
+          data-active={vote === 'up' || undefined}
+          onClick={() => toggle('up')}
+        >
+          <ThumbsUpIcon size={14} />
+        </RateButton>
+        <RateButton
+          variant="ghost" size="xs" iconOnly
+          aria-label="Bad response" aria-pressed={vote === 'down'}
+          data-active={vote === 'down' || undefined}
+          onClick={() => toggle('down')}
+        >
+          <ThumbsDownIcon size={14} />
+        </RateButton>
+        <Button variant="ghost" size="xs" iconOnly aria-label="Rerun">
+          <RefreshCw04Icon size={14} />
+        </Button>
+      </AIMessageActions>
+    </ActionsRow>
   );
 }
 
@@ -225,23 +305,23 @@ function BlockRecords({ records, initial = 3 }: { records: RecordRef[]; initial?
   );
 }
 
-function MilestoneIcon({ icon, slotRef, hidden }: {
+function MilestoneIcon({ slotRef, hidden }: {
   icon: ActivityMilestone['icon'];
   slotRef?: (el: HTMLElement | null) => void;
   hidden?: boolean;
 }) {
-  // The live agent mark is no longer drawn here — it floats over the icon column
+  // Settled activities read as completed steps — a success checkmark on the icon
+  // rail. The live agent mark is no longer drawn here — it floats over the column
   // (see ActivitySession). `slotRef` lets that mark measure this icon's position
   // so it can glide onto it; `hidden` keeps the icon's layout while the mark
-  // covers it, so geometry stays measurable.
-  const Icon = WORKING_ICON[icon] ?? WORKING_ICON.clock;
-  return <IconBadge ref={slotRef} aria-hidden="true" $hidden={hidden}><Icon size={16} /></IconBadge>;
+  // covers it, so geometry stays measurable (the check reappears once it glides on).
+  return <IconBadge ref={slotRef} aria-hidden="true" $hidden={hidden}><CheckIcon size={16} /></IconBadge>;
 }
 
 /** A milestone's headline + (collapsible) detail blocks. Shared by the inline
  *  trail row and the standalone step card. While `typing`, the headline types
  *  out and the detail blocks hold until it finishes — Ultron mid-thought. */
-function MilestoneContent({ milestone, last, typing, icon, collapsible = true }: { milestone: ActivityMilestone; last?: boolean; typing?: boolean; icon?: ReactNode; collapsible?: boolean }) {
+function MilestoneContent({ milestone, last, typing, icon, collapsible = true, usage }: { milestone: ActivityMilestone; last?: boolean; typing?: boolean; icon?: ReactNode; collapsible?: boolean; usage?: ActivityUsageData }) {
   const hasBlocks = !!milestone.blocks?.length;
   const [open, setOpen] = useState(true);
   const [headlineDone, setHeadlineDone] = useState(!typing);
@@ -288,7 +368,7 @@ function MilestoneContent({ milestone, last, typing, icon, collapsible = true }:
               {b.checks && (
                 <CheckList>
                   {b.checks.map((x, k) => (
-                    <li key={k}><CheckIcon size={14} /><span>{x}</span></li>
+                    <li key={k}><CheckDot aria-hidden="true" /><span>{x}</span></li>
                   ))}
                 </CheckList>
               )}
@@ -298,27 +378,30 @@ function MilestoneContent({ milestone, last, typing, icon, collapsible = true }:
         </Blocks>
       )}
 
-      {/* Card/session layout (icon mode): a per-activity toggle that reveals the
-          tools, skills, and data the activity drew on. Holds until the headline
-          finishes typing so it doesn't pop in mid-thought. */}
-      {icon && headlineDone && <ActivityUsage icon={milestone.icon} />}
+      {/* Card/session layout (icon mode): a toggle that reveals the tools, skills,
+          and data the group drew on. Shown only under the last activity in a
+          group (where `usage` is passed), and only once the headline finishes
+          typing so it doesn't pop in mid-thought. */}
+      {icon && headlineDone && usage && <ActivityUsage usage={usage} />}
     </Content>
   );
 }
 
-/** A 24px tertiary toggle that shows/hides the tools, skills, and data an
- *  activity used. Collapsed by default. */
-function ActivityUsage({ icon }: { icon: WorkingIcon }) {
+/** A 24px tertiary toggle that shows/hides the tools, skills, and data a group
+ *  of activities drew on (the combined, deduped set). Collapsed by default. */
+function ActivityUsage({ usage }: { usage: ActivityUsageData }) {
   const [open, setOpen] = useState(false);
-  const usage = activityUsage(icon);
-  // Label is the per-category counts; a category with nothing used is omitted.
+  // Label is a verb-led summary of what the activity drew on — "ran N skills,
+  // read N data, used N tools" — with empty categories omitted.
   const plural = (n: number, s: string) => `${n} ${n === 1 ? s : s + 's'}`;
   const label = [
-    usage.tools.length ? plural(usage.tools.length, 'tool') : null,
-    usage.skills.length ? plural(usage.skills.length, 'skill') : null,
-    usage.data.length ? `${usage.data.length} data` : null,
-  ].filter(Boolean).join(' · ');
+    usage.skills.length ? `ran ${plural(usage.skills.length, 'skill')}` : null,
+    usage.data.length ? `read ${usage.data.length} data` : null,
+    usage.tools.length ? `used ${plural(usage.tools.length, 'tool')}` : null,
+  ].filter(Boolean).join(', ');
   if (!label) return null;
+  // Capitalize the leading verb (the first segment, whichever it is).
+  const labelText = label.charAt(0).toUpperCase() + label.slice(1);
   return (
     <Usage>
       <UsageToggle
@@ -329,7 +412,7 @@ function ActivityUsage({ icon }: { icon: WorkingIcon }) {
         trailingArtwork={<UsageChevron data-open={open || undefined}><ChevronRightIcon size={12} /></UsageChevron>}
         onClick={() => setOpen(o => !o)}
       >
-        {label}
+        {labelText}
       </UsageToggle>
       {open && (
         <UsagePanel>
@@ -455,7 +538,7 @@ const SessionConnector = styled.span`
 /* The single live agent mark. Absolutely placed within the session body and
    moved via a transform that animates, so it glides from step to step and then
    down to its resting spot. 36px = space-8 + space-1. */
-const FloatingMark = styled.span`
+const FloatingMark = styled.span<{ $glide?: boolean }>`
   position: absolute;
   top: 0;
   left: 0;
@@ -467,14 +550,42 @@ const FloatingMark = styled.span`
   pointer-events: none;
   /* Gentle ease-in-out so the glide between steps accelerates and settles
      smoothly rather than snapping; a softer opacity fade lets it cross-fade with
-     the resting magnetic mark on handoff. */
-  transition: transform 460ms cubic-bezier(0.4, 0, 0.2, 1),
-    opacity 260ms var(--ease-out);
+     the resting magnetic mark on handoff. The transform transition is withheld
+     for the first placement ($glide false) so the mark fades in where it belongs
+     instead of sliding in from the corner. */
+  transition: ${p => (p.$glide ? 'transform 460ms cubic-bezier(0.4, 0, 0.2, 1), ' : '')}opacity 260ms var(--ease-out);
   will-change: transform, opacity;
 
   @media (prefers-reduced-motion: reduce) {
     transition: opacity 200ms var(--ease-out);
   }
+`;
+
+/* The group's feedback footer — sits below the last activity with quiet top
+   spacing so it reads as a trailing action row rather than another step. Hung
+   under the headline (clears the inline icon column like Blocks/Usage) so the
+   cluster lines up with the sub-context text above it. */
+const ActionsRow = styled.div`
+  padding-top: var(--space-4);
+  /* Nudge the action cluster 8px further below the usage toggle. */
+  margin-top: var(--space-2);
+  padding-left: calc(var(--space-8) + var(--space-3));
+
+  /* Size the action buttons (thumbs up/down + rerun) to a 32px tap target,
+     keeping their icons centered. The min-width override beats the design
+     system's icon-only width rule. */
+  & button {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    padding: 0;
+  }
+`;
+
+/* A thumbs button that lights up when it's the active rating; otherwise it
+   matches the tertiary chrome of the rest of the cluster. */
+const RateButton = styled(Button)`
+  &[data-active] { color: var(--color-content-brand); }
 `;
 
 /* Types a string out character-by-character with a blinking caret. The full
@@ -549,7 +660,7 @@ const IconBadge = styled.span<{ $hidden?: boolean }>`
   flex-shrink: 0;
   width: var(--space-8);
   height: var(--space-8);
-  color: var(--color-content-secondary);
+  color: var(--color-success-content);
   visibility: ${p => (p.$hidden ? 'hidden' : 'visible')};
 `;
 
@@ -632,7 +743,7 @@ const Usage = styled.div`
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding-top: var(--space-2);
+  padding-top: var(--space-3);
   padding-left: calc(var(--space-8) + var(--space-3));
 `;
 
@@ -640,7 +751,9 @@ const Usage = styled.div`
    sub-context text above it (no negative inset). */
 const UsageToggle = styled(Button)`
   align-self: flex-start;
-  color: var(--color-content-tertiary);
+  /* The usage summary is the faintest text on the card — one step lighter than
+     the tertiary captions around it. */
+  color: var(--color-content-disabled);
 `;
 
 /* Trailing chevron — points right, rotates down when the panel is open. */
@@ -763,8 +876,14 @@ const CheckList = styled.ul`
     line-height: var(--line-height-normal);
     color: var(--color-content-tertiary);
   }
-  & li svg {
-    flex-shrink: 0;
-    color: var(--color-success-content);
-  }
+`;
+
+/* The leading marker for a check-list item — a small dot in place of a check
+   glyph, matching the disc bullets used elsewhere in the trail. */
+const CheckDot = styled.span`
+  flex-shrink: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: currentColor;
 `;

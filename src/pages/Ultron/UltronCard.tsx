@@ -9,20 +9,22 @@
 import { useEffect, useState } from 'react';
 import styled, { keyframes, css } from 'styled-components';
 import {
-  Avatar, Button, Save01Icon, MinusIcon, ChevronSelectorVerticalIcon, CheckIcon, LinkExternal01Icon, XCloseIcon,
+  Avatar, Button, Save01Icon, MinusIcon, ChevronSelectorVerticalIcon, ChevronRightIcon, CheckIcon, LinkExternal01Icon, XCloseIcon,
+  AlertTriangleIcon, CheckCircleIcon,
 } from 'alloy-design-system';
 import type { ThreadItem } from './types';
 import {
   THREAD_SUBJECTS, threadAvatarUrl, THREAD_PROMPTS, threadDisplayTitle, threadMeta,
   THREAD_FOLLOWUPS, THREAD_RECORDS, THREAD_RESOLVED_RECORDS, activityForThread, analyzingSteps,
-  WORKING_ACTIVITIES,
+  WORKING_ACTIVITIES, THREAD_TASKS,
 } from './fixtures';
-import type { ActivityMilestone, WorkingMilestone } from './fixtures';
+import type { ActivityMilestone, WorkingMilestone, PlanTask, RecordRef, AnalyzingStep } from './fixtures';
 import { RecordCard } from './RecordCard';
 import {
   isPurpleRow, isRefinementAction, OutcomeBlock, toneFor, UNRESOLVED_ACTIONS,
-  hasMultipleCtas, DO_IT_ALL_LABEL,
+  hasMultipleCtas, DO_IT_ALL_LABEL, deriveStepLabels,
 } from './ultronShared';
+import type { CardTone } from './ultronShared';
 import { ACTIVITY_STEP_MS } from './store';
 import { ActivityTrail, ActivityTrailCards } from './ActivityTrail';
 import { AgentMark } from './AgentMark';
@@ -31,6 +33,54 @@ import { AgentMark } from './AgentMark';
  *  beat so the response feels acknowledged immediately, before the remaining
  *  steps pace in at the slower ACTIVITY_STEP_MS cadence. */
 const POST_REPLY_MS = 450;
+
+/** The case lifecycle, surfaced as a stepper on the event card header. */
+const LIFECYCLE_STEPS = ['Analyzed', 'Plan proposed', 'Working', 'Resolved'] as const;
+
+/** The active lifecycle step for a status, or null for statuses outside the
+ *  Analyzed → Plan proposed → Working → Resolved pipeline (monitoring,
+ *  unresolved, workflow-ready).
+ *
+ *  `stage` is the case's decision stage (0 = first CTA, 1 = follow-up CTA). Once
+ *  the operator has taken the first action (stage >= 1), the case is executing —
+ *  hold the stepper on Working through any follow-up question until it resolves,
+ *  rather than snapping back to Plan proposed. */
+function lifecycleStep(status: ThreadItem['status'], stage = 0): number | null {
+  if (status === 'resolved' || status === 'auto_resolved') return 3;
+  if (stage >= 1 && lifecycleStep(status) != null) return 2;
+  switch (status) {
+    case 'analyzing':      return 0;
+    case 'needs_approval':
+    case 'recommended':    return 1;
+    case 'in_progress':    return 2;
+    default:               return null;
+  }
+}
+
+/** Light-bulb glyph for Ultron's "suggested" (slate) cases. The Alloy icon set
+ *  has no bulb, so this matches its stroke conventions (24px viewBox,
+ *  currentColor, 1.75 stroke, round caps) to sit cleanly beside the Alloy icons. */
+function LightbulbIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+      xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2 1.5 3.5.8.8 1.3 1.5 1.5 2.5" />
+      <path d="M9 18h6" />
+      <path d="M10 22h4" />
+    </svg>
+  );
+}
+
+/** Leading icon for Ultron's analysis-result line, chosen by the case tone so the
+ *  glyph reads the same status the surface color does: orange (risk awaiting
+ *  approval) → warning triangle, green (resolved) → check, slate (lower-severity
+ *  recommendation / suggested event) → light bulb. */
+function analysisResultIcon(tone: CardTone) {
+  if (tone === 'orange') return AlertTriangleIcon;
+  if (tone === 'green') return CheckCircleIcon;
+  return LightbulbIcon;
+}
 
 interface UltronCardProps {
   thread: ThreadItem;
@@ -76,9 +126,13 @@ function deriveCase(thread: ThreadItem, stage: number) {
   const actions = thread.status === 'unresolved'
     ? UNRESOLVED_ACTIONS
     : onFollowUp ? followUp!.actions : thread.actions;
-  // When the question bundles several actions, collapse to a single combined
-  // "Yes, do it all" primary plus the "Other" escape hatch.
-  const multiCta = needsDecision && hasMultipleCtas(prompt);
+  // A multi-step case collapses its actions to a single "Approve all" primary
+  // plus the "Other" escape hatch. It's multi-step when the base prompt has an
+  // authored task breakdown of 2+ steps, or — for cases without one — when the
+  // prompt itself conjoins clauses ("X and Y"). Follow-ups stay single-action.
+  const multiCta = needsDecision && (
+    (!onFollowUp && (THREAD_TASKS[thread.id]?.length ?? 0) > 1) || hasMultipleCtas(prompt)
+  );
   const primaryLabel = multiCta ? DO_IT_ALL_LABEL : actions[actions.length - 1];
   const secondaryLabels = multiCta ? [] : actions.slice(0, -1);
   const purple = isPurpleRow(thread);
@@ -88,7 +142,7 @@ function deriveCase(thread: ThreadItem, stage: number) {
 export function UltronCard({ thread, stage, expanded, detachActionable, detachAnalyzing, detachTrail, onToggle, onClose, onDecide, onAction, onRefinement, onSaveWorkflow }: UltronCardProps) {
   const [savedWorkflow, setSavedWorkflow] = useState(false);
 
-  const { needsDecision, actionable, prompt, records, primaryLabel, secondaryLabels, purple } = deriveCase(thread, stage);
+  const { actionable, prompt, records, primaryLabel, secondaryLabels, purple } = deriveCase(thread, stage);
   // Intermediate state: the event has arrived and Ultron is still thinking — no
   // actionables or questions decided yet.
   const analyzing = thread.status === 'analyzing';
@@ -96,6 +150,17 @@ export function UltronCard({ thread, stage, expanded, detachActionable, detachAn
   // card placed below (see <UltronAnalyzingCard>).
   const showAnalyzing = analyzing && !detachAnalyzing;
   const isResolved = thread.status === 'resolved' || thread.status === 'auto_resolved';
+
+  // While a case awaits an operator decision (needs approval / recommended /
+  // unresolved), surface Ultron's one-line conclusion as a white result block
+  // under the header — the same treatment the resolved card gives its outcome line.
+  const showAnalysisResult = actionable && !!thread.analysisResult;
+
+  // While analyzing in the paged view (the thinking stream is detached into its
+  // own card below), the event card would otherwise be an empty header. Give it
+  // the same white body block the decided cards get — Ultron's current read of
+  // the event as the "additional info" — so it reads as a real event card.
+  const showAnalyzingInfo = analyzing && detachAnalyzing && !!(thread.analysisResult ?? thread.assessment);
 
   // When the actionable block is detached (rendered at the page bottom), the
   // prompt, context records, and action buttons all move there — the event card
@@ -106,8 +171,8 @@ export function UltronCard({ thread, stage, expanded, detachActionable, detachAn
   // no in-card body (their live activity renders below as <UltronWorkingCards>),
   // so we skip the body wrapper rather than render an empty white box.
   const hasBody = detachActionable
-    ? (showAnalyzing || isResolved)
-    : (actionable || showAnalyzing || isResolved || showActions);
+    ? (showAnalyzing || isResolved || showAnalysisResult || showAnalyzingInfo)
+    : (actionable || showAnalyzing || isResolved || showActions || showAnalysisResult || showAnalyzingInfo);
 
   // A header-only case (monitoring / in-progress, whose activity streams below
   // as separate cards) has no in-card body to expand into, so it always reads as
@@ -117,6 +182,14 @@ export function UltronCard({ thread, stage, expanded, detachActionable, detachAn
 
   // Card tone (shared with the sidebar dots): green / orange / slate.
   const tone = toneFor(thread);
+
+  // Glanceable sub-context under the title (Role · Shift time · Location). The
+  // structured meta shows in every state — it's useful context whether the case
+  // is collapsed, working, or resolved. Only the prose-assessment fallback (for
+  // cases with no structured meta) is limited to the collapsed state, where it
+  // stands in for the body.
+  const metaLine = threadMeta(thread.id);
+  const subtitle = metaLine || (!effectiveExpanded ? thread.assessment : '');
 
   const trigger = (label: string) => {
     if (isRefinementAction(label)) onRefinement(label);
@@ -141,10 +214,10 @@ export function UltronCard({ thread, stage, expanded, detachActionable, detachAn
           <HeaderText>
             <CardTitle>{threadDisplayTitle(thread)}</CardTitle>
             {/* Glanceable case IA — Role · Shift time · Location — so the row
-                scans at a glance. Falls back to Ultron's prose read when a case
-                carries no structured metadata. Collapsed only; when expanded the
-                prompt carries the recommendation. */}
-            {!effectiveExpanded && <CardSubtitle>{threadMeta(thread.id) || thread.assessment}</CardSubtitle>}
+                scans at a glance across every status (working, resolved, …).
+                Falls back to Ultron's prose read only when a case carries no
+                structured metadata and the card is collapsed. */}
+            {subtitle && <CardSubtitle>{subtitle}</CardSubtitle>}
           </HeaderText>
         </HeaderToggle>
         <Button
@@ -169,6 +242,22 @@ export function UltronCard({ thread, stage, expanded, detachActionable, detachAn
 
       {effectiveExpanded && hasBody && (
       <CardBody>
+        {(showAnalysisResult || showAnalyzingInfo) && (() => {
+          const ResultIcon = analysisResultIcon(tone);
+          return (
+            <ResultRow>
+              <ResultIconSlot data-tone={tone} aria-hidden="true">
+                {/* Still analyzing → an active working mark (Ultron is thinking);
+                    once a conclusion lands, the tone status glyph. */}
+                {showAnalyzingInfo
+                  ? <AgentMark mark="lines" size={20} tone="auto" state="active" coreHalo={false} />
+                  : <ResultIcon size={16} />}
+              </ResultIconSlot>
+              <AnalysisResult>{thread.analysisResult ?? thread.assessment}</AnalysisResult>
+            </ResultRow>
+          );
+        })()}
+
         {actionable && !detachActionable && <Prompt>{prompt}</Prompt>}
 
         {actionable && !detachActionable && records.length > 0 && (
@@ -254,7 +343,21 @@ interface UltronActionCardProps {
 
 export function UltronActionCard({ thread, stage, onAction, onRefinement, onSaveWorkflow, onDismiss }: UltronActionCardProps) {
   const [savedWorkflow, setSavedWorkflow] = useState(false);
-  const { actionable, prompt, records, primaryLabel, secondaryLabels, purple } = deriveCase(thread, stage);
+  const { actionable, onFollowUp, prompt, records, primaryLabel, secondaryLabels, purple } = deriveCase(thread, stage);
+
+  // Cases with a task breakdown render their plan as discrete step cards (the
+  // bundled "do A and B" prompt as its steps) instead of a flat candidate-card
+  // list. Authored tasks win; otherwise a bundled prompt is split into steps on
+  // the fly (so detected/spawned cases get step cards too). Only on the base
+  // prompt — a follow-up keeps the plain record list.
+  const tasks = actionable && !onFollowUp
+    ? (THREAD_TASKS[thread.id] ?? deriveStepLabels(prompt).map(label => ({ label })))
+    : undefined;
+
+  // Every resolved case can be saved as a workflow — purple rows surface it
+  // explicitly, but any resolved/auto-resolved outcome offers it too.
+  const isResolved = thread.status === 'resolved' || thread.status === 'auto_resolved';
+  const offerWorkflow = purple || isResolved;
 
   const trigger = (label: string) => {
     if (isRefinementAction(label)) onRefinement(label);
@@ -277,14 +380,16 @@ export function UltronActionCard({ thread, stage, onAction, onRefinement, onSave
         </DismissSlot>
       )}
       {actionable && <Prompt>{prompt}</Prompt>}
-      {/* Workflow-ready rows aren't a decision — they just offer to save the
-          resolved play. Ask for it explicitly above the Save button. */}
-      {purple && !actionable && <Prompt>Want me to save this as a reusable workflow?</Prompt>}
-      {actionable && records.length > 0 && (
+      {/* Workflow-ready / resolved rows aren't a decision — they just offer to
+          save the resolved play. Ask for it explicitly above the Save button. */}
+      {offerWorkflow && !actionable && <Prompt>Want me to save this as a reusable workflow?</Prompt>}
+      {tasks && tasks.length > 0 ? (
+        <PlanTaskList tasks={tasks} records={records} />
+      ) : actionable && records.length > 0 ? (
         <RecordList>
           {records.map((r, i) => <RecordCard key={i} record={r} />)}
         </RecordList>
-      )}
+      ) : null}
       <Actions>
         {actionable && primaryLabel && (
           <Pill variant="primary" size="sm" onClick={() => trigger(primaryLabel)}>
@@ -301,7 +406,7 @@ export function UltronActionCard({ thread, stage, onAction, onRefinement, onSave
             Other
           </OtherPill>
         )}
-        {purple && (
+        {offerWorkflow && (
           savedWorkflow ? (
             <Button
               variant="secondary" size="sm"
@@ -328,6 +433,90 @@ export function UltronActionCard({ thread, stage, onAction, onRefinement, onSave
   );
 }
 
+// ── Plan tasks ──────────────────────────────────────────────────────────────
+// The decision's plan as a checklist of discrete tasks Ultron will run if
+// approved. A `showsCandidates` task swaps inline text for a stacked avatar
+// group of the people it would contact (drawn from the thread's records).
+function PlanTaskList({ tasks, records }: { tasks: PlanTask[]; records: RecordRef[] }) {
+  return (
+    <TaskList>
+      {tasks.map((task, i) => (
+        <TaskRow key={i}>
+          <TaskMarker aria-hidden="true">{i + 1}</TaskMarker>
+          <TaskLabel>{task.label}</TaskLabel>
+          {task.showsCandidates && records.length > 0 && (
+            <TaskTrailing>
+              <AvatarStack records={records} />
+              <TaskCount>{records.length} candidates</TaskCount>
+            </TaskTrailing>
+          )}
+          {/* A named-person task shows its subject (avatar + name) in the same
+             right-aligned trailing slot as the candidate group above. */}
+          {task.person && (
+            <TaskTrailing>
+              <Avatar size="sm" src={threadAvatarUrl(task.person.avatarSeed)} name={task.person.name} alt={task.person.name} />
+              <TaskCount>{task.person.name}</TaskCount>
+            </TaskTrailing>
+          )}
+        </TaskRow>
+      ))}
+    </TaskList>
+  );
+}
+
+/** Overlapping avatar group — the first few people, then a "+N" overflow chip
+ *  when the list runs longer than the cap. */
+function AvatarStack({ records }: { records: RecordRef[] }) {
+  const MAX = 4;
+  const shown = records.slice(0, MAX);
+  const extra = records.length - shown.length;
+  return (
+    <Stack>
+      {shown.map((r, i) => (
+        <StackItem key={r.avatarSeed} style={{ zIndex: shown.length - i }}>
+          <Avatar size="sm" src={threadAvatarUrl(r.avatarSeed)} name={r.title} alt={r.title} />
+        </StackItem>
+      ))}
+      {extra > 0 && <StackOverflow>+{extra}</StackOverflow>}
+    </Stack>
+  );
+}
+
+// ── Progress steppers ─────────────────────────────────────────────────────────
+// The case lifecycle stepper, lifted out of the event card into its own card
+// placed directly below it. Advances with the case's status:
+// Analyzed → Plan proposed → Working → Resolved. Renders nothing for statuses
+// outside that pipeline (monitoring / unresolved / workflow-ready).
+export function UltronStepperCard({ thread, stage = 0 }: { thread: ThreadItem; stage?: number }) {
+  const step = lifecycleStep(thread.status, stage);
+  if (step == null) return null;
+  const tone = toneFor(thread);
+  const executing = thread.status === 'in_progress';
+  return (
+    <StepperCard data-tone={tone}>
+      <Stepper
+        data-tone={tone}
+        data-working={executing || undefined}
+        /* The terminal step (Resolved) is a settled end state — its bar fills
+           statically rather than running the in-progress draw animation. */
+        data-terminal={step === LIFECYCLE_STEPS.length - 1 || undefined}
+        role="progressbar"
+        aria-valuemin={1}
+        aria-valuemax={LIFECYCLE_STEPS.length}
+        aria-valuenow={step + 1}
+        aria-valuetext={LIFECYCLE_STEPS[step]}
+      >
+        {LIFECYCLE_STEPS.map((label, i) => (
+          <Step key={label} data-state={i < step ? 'done' : i === step ? 'current' : 'upcoming'}>
+            <StepBar />
+            <StepLabel>{label}</StepLabel>
+          </Step>
+        ))}
+      </Stepper>
+    </StepperCard>
+  );
+}
+
 // ── Analyzing ─────────────────────────────────────────────────────────────────
 // The "Ultron is thinking" content (orbit mark + headline + assessment + demo
 // trigger). Shared by the in-card analyzing block and the detached card below.
@@ -335,7 +524,7 @@ export function UltronActionCard({ thread, stage, onAction, onRefinement, onSave
 // steps settle to a check; the newest pulses. Each new row animates in, so the
 // analyzing card grows in height as Ultron's work unfolds. The final step stays
 // in-progress (Ultron is still analyzing) until the case flips to Needs approval.
-function AnalyzingStream({ steps, completed }: { steps: string[]; completed?: boolean }) {
+function AnalyzingStream({ steps, completed }: { steps: AnalyzingStep[]; completed?: boolean }) {
   const [count, setCount] = useState(completed ? steps.length : 1);
 
   useEffect(() => {
@@ -345,19 +534,29 @@ function AnalyzingStream({ steps, completed }: { steps: string[]; completed?: bo
     return () => clearTimeout(t);
   }, [count, steps.length, completed]);
 
+  const shown = steps.slice(0, count);
   return (
     <Stream role="status" aria-live="polite">
-      {steps.slice(0, count).map((step, i) => {
+      {shown.map((step, i) => {
         // Once analysis is complete every step reads as done (checked).
         const inProgress = !completed && i === count - 1;
+        // The dashed rail connects each step down to the next revealed one; the
+        // last visible row has nothing below it yet, so it drops the connector.
+        const last = i === shown.length - 1;
         return (
           <StreamRow key={i}>
-            <StreamMark $done={!inProgress} aria-hidden="true">
-              {inProgress
-                ? <WorkingMarkAbs><AgentMark mark="lines" size={36} tone="auto" state="active" motionSpeed={2} coreHalo={false} aria-label="In progress" /></WorkingMarkAbs>
-                : <CheckIcon size={12} />}
-            </StreamMark>
-            <StreamText $done={!inProgress}>{step}</StreamText>
+            <StreamIconCol>
+              <StreamMark $done={!inProgress} aria-hidden="true">
+                {inProgress
+                  ? <WorkingMarkAbs><AgentMark mark="lines" size={36} tone="auto" state="active" motionSpeed={2} coreHalo={false} aria-label="In progress" /></WorkingMarkAbs>
+                  : <CheckIcon size={16} />}
+              </StreamMark>
+              {!last && <StreamConnector />}
+            </StreamIconCol>
+            <StreamContent $last={last}>
+              <StreamHeadline>{step.headline}</StreamHeadline>
+              <StreamDetail>{step.detail}</StreamDetail>
+            </StreamContent>
           </StreamRow>
         );
       })}
@@ -365,11 +564,18 @@ function AnalyzingStream({ steps, completed }: { steps: string[]; completed?: bo
   );
 }
 
-function AnalyzingBody({ thread, onDecide, analyzed }: { thread: ThreadItem; onDecide: (threadId: string) => void; analyzed?: boolean }) {
+function AnalyzingBody({ thread, onDecide, analyzed, hideDetail, hideTrigger }: { thread: ThreadItem; onDecide: (threadId: string) => void; analyzed?: boolean; hideDetail?: boolean; hideTrigger?: boolean }) {
+  // The thinking steps form a collapsible group, mirroring the activity-trail
+  // session: the header row toggles the stream open/shut. It stays open while
+  // analysis streams; once analyzed, the operator can collapse the recap.
+  const [open, setOpen] = useState(true);
   return (
     <>
-      {/* Mark centers on the headline + assessment text (not the demo button). */}
-      <AnalyzingRow>
+      {/* The mark + headline double as the group's toggle (like the session
+          header), with a trailing chevron. When the event card already carries
+          the assessment in its white block (the detached/paged layout), the
+          detail is hidden here to avoid repeating it. */}
+      <AnalyzingRow as="button" type="button" $interactive aria-expanded={open} onClick={() => setOpen(o => !o)}>
         <AgentMark mark="orbit" size={40} tone="auto" state={analyzed ? 'idle' : 'active'} coreHalo={false} aria-hidden="true" />
         <AnalyzingText>
           <AnalyzingHeadline>
@@ -379,15 +585,17 @@ function AnalyzingBody({ thread, onDecide, analyzed }: { thread: ThreadItem; onD
               <>Ultron is analyzing this event<Dots aria-hidden="true"><span>.</span><span>.</span><span>.</span></Dots></>
             )}
           </AnalyzingHeadline>
-          <AnalyzingDetail>{thread.assessment}</AnalyzingDetail>
+          {!hideDetail && <AnalyzingDetail>{thread.assessment}</AnalyzingDetail>}
         </AnalyzingText>
+        <AnalyzingChevron data-open={open || undefined} aria-hidden="true"><ChevronRightIcon size={14} /></AnalyzingChevron>
       </AnalyzingRow>
       {/* Thinking stream — reveals step-by-step while analyzing; all steps read
-          as complete once analyzed. */}
-      <AnalyzingStream steps={analyzingSteps(thread.id)} completed={analyzed} />
+          as complete once analyzed. Collapses with the group header above. */}
+      {open && <AnalyzingStream steps={analyzingSteps(thread.id)} completed={analyzed} />}
       {/* DEMO ONLY — skip the wait and reveal the recommendation prompt. Gone
-          once analysis has completed. */}
-      {!analyzed && (
+          once analysis has completed. In the paged layout the trigger is lifted
+          into a bottom-fixed dock (see UltronAnalyzingTrigger), so it's hidden here. */}
+      {!analyzed && !hideTrigger && (
         <DemoTrigger variant="secondary" size="sm" onClick={() => onDecide(thread.id)}>
           Trigger Needs approval (demo)
         </DemoTrigger>
@@ -396,15 +604,26 @@ function AnalyzingBody({ thread, onDecide, analyzed }: { thread: ThreadItem; onD
   );
 }
 
+/* DEMO ONLY — the analyzing "Trigger Needs approval" control, lifted out of the
+   analyzing card so the paged layout can dock it at the page bottom (mirrors the
+   decision surface's dock). */
+export function UltronAnalyzingTrigger({ thread, onDecide }: { thread: ThreadItem; onDecide: (threadId: string) => void }) {
+  return (
+    <DemoTrigger variant="secondary" size="sm" onClick={() => onDecide(thread.id)}>
+      Trigger Needs approval (demo)
+    </DemoTrigger>
+  );
+}
+
 // The detached analyzing surface — the same thinking block, lifted out of the
 // event card into its own card placed directly below it (the feed's gap sets
 // the spacing). Same radius as the event card, a small drop shadow, no border.
 // `analyzed` switches it to the completed summary that persists after the case
 // has moved on to Needs approval.
-export function UltronAnalyzingCard({ thread, onDecide, analyzed }: { thread: ThreadItem; onDecide: (threadId: string) => void; analyzed?: boolean }) {
+export function UltronAnalyzingCard({ thread, onDecide, analyzed, hideTrigger }: { thread: ThreadItem; onDecide: (threadId: string) => void; analyzed?: boolean; hideTrigger?: boolean }) {
   return (
     <AnalyzingCard role="status" aria-live="polite">
-      <AnalyzingBody thread={thread} onDecide={onDecide} analyzed={analyzed} />
+      <AnalyzingBody thread={thread} onDecide={onDecide} analyzed={analyzed} hideDetail hideTrigger={hideTrigger} />
     </AnalyzingCard>
   );
 }
@@ -435,19 +654,42 @@ function workingToMilestone(w: WorkingMilestone): ActivityMilestone {
   return { icon: w.icon, headline: w.headline, blocks: w.detail ? [{ text: w.detail }] : undefined };
 }
 
+/** Analyzing "thinking" steps carry a headline + detail; fold them into the
+ *  accumulated trail as activity milestones so the analysis reads as part of the
+ *  one event-activity stream (rather than a separate card above it). */
+function analyzingToMilestone(s: AnalyzingStep): ActivityMilestone {
+  return { icon: s.icon, headline: s.headline, blocks: s.detail ? [{ text: s.detail }] : undefined };
+}
+
 /** Build the chronological trail for a case. With no operator action yet (or a
  *  case resolved without one, e.g. autonomous/historical), it's just the full
  *  activity trail. Once the operator acts, the trail interleaves: the reasoning
  *  Ultron did BEFORE each decision, then the sent message, then the work Ultron
  *  ran as a RESULT of it — repeating per stage (first action, then follow-up). */
 function buildTrail(thread: ThreadItem, outbound: string[]): { items: TrailItem[]; reasoningCount: number } {
-  const milestones = activityForThread(thread);
+  const eventMilestones = activityForThread(thread);
   const doneCount = thread.timeline.filter(s => s.done).length;
-  const reasoningCount = doneCount > 0 ? Math.min(doneCount, milestones.length) : milestones.length;
+  const eventCount = doneCount > 0 ? Math.min(doneCount, eventMilestones.length) : eventMilestones.length;
+  // The reasoning portion of the trail is the triggering event activity PLUS the
+  // analysis steps Ultron worked through — one consolidated, accumulated stream
+  // (the standalone "Ultron analyzed this event" card is dropped once analyzed).
+  const milestones = [
+    ...eventMilestones.slice(0, eventCount),
+    ...analyzingSteps(thread.id).map(analyzingToMilestone),
+  ];
+  const reasoningCount = milestones.length;
 
   // No action taken this session → keep the full trail as-is (no messages).
   if (outbound.length === 0) {
-    return { items: milestones.map(m => ({ kind: 'activity', milestone: m })), reasoningCount };
+    const items: TrailItem[] = milestones.map(m => ({ kind: 'activity', milestone: m }));
+    // A case already executing autonomously (working state, no operator action
+    // this session) continues the trail with the work Ultron is running — no
+    // sent-message bubble, since the operator didn't kick it off here.
+    if (thread.status === 'in_progress') {
+      (WORKING_ACTIVITIES[thread.id] ?? []).map(workingToMilestone)
+        .forEach(m => items.push({ kind: 'activity', milestone: m }));
+    }
+    return { items, reasoningCount };
   }
 
   // The execution sequence Ultron runs after each decision: stage 0 is the
@@ -468,7 +710,7 @@ function buildTrail(thread: ThreadItem, outbound: string[]): { items: TrailItem[
   return { items, reasoningCount };
 }
 
-export function UltronActivityCards({ thread, outbound = [] }: { thread: ThreadItem; outbound?: string[] }) {
+export function UltronActivityCards({ thread, outbound = [], analyzing = false }: { thread: ThreadItem; outbound?: string[]; analyzing?: boolean }) {
   const executing = thread.status === 'in_progress';
   const resolved = thread.status === 'resolved' || thread.status === 'auto_resolved';
 
@@ -477,8 +719,10 @@ export function UltronActivityCards({ thread, outbound = [] }: { thread: ThreadI
   // Revealed-item count: seeded with the reasoning steps, then only ever grows
   // toward the full trail. Because this component stays mounted across phases,
   // the count persists — so acting on a case appends new entries rather than
-  // clearing and re-growing the trail from scratch.
-  const [count, setCount] = useState(reasoningCount);
+  // clearing and re-growing the trail from scratch. While analyzing, it streams
+  // the reasoning in from the first step (so the group runs live, like Ultron
+  // thinking) rather than appearing all at once.
+  const [count, setCount] = useState(analyzing ? Math.min(1, reasoningCount) : reasoningCount);
   // Once the operator has acted, every available entry (their message + the
   // resulting work) streams in; otherwise only the reasoning shows until the
   // case actually executes/resolves.
@@ -516,7 +760,7 @@ export function UltronActivityCards({ thread, outbound = [] }: { thread: ThreadI
   // working and the stream is still growing — never re-typing settled cards.
   const streaming = count < items.length;
   const newestIsActivity = revealed.length > 0 && revealed[revealed.length - 1].kind === 'activity';
-  const typingOn = executing && streaming && newestIsActivity;
+  const typingOn = (executing || analyzing) && streaming && newestIsActivity;
   let lastActsIdx = -1;
   groups.forEach((g, i) => { if (g.type === 'acts') lastActsIdx = i; });
 
@@ -536,7 +780,12 @@ export function UltronActivityCards({ thread, outbound = [] }: { thread: ThreadI
   // presence, the magnetic form, just below the last completed activity. It stays
   // there across the wait (operator decision, follow-up) until the case resolves.
   const atRest = count >= target;
-  const showRestingMark = !resolved && atRest && revealed.length > 0;
+  // While analyzing, the live working mark rides the reasoning (see below), so the
+  // resting "monitoring" mark holds off until analysis settles into a decision.
+  // While executing, the working group settles its OWN mark in place (it glides
+  // down + morphs lines → magnetic), so the separate foot mark stays out of the
+  // way — otherwise the in-trail mark would vanish and this one would pop in below.
+  const showRestingMark = !resolved && !analyzing && !executing && atRest && revealed.length > 0;
 
   // Keep the resting magnetic mark mounted briefly after activity resumes so it
   // fades out in place (cross-fading into the gliding lines mark) instead of
@@ -559,8 +808,22 @@ export function UltronActivityCards({ thread, outbound = [] }: { thread: ThreadI
         // newest step — but only while the working group is actively streaming.
         // Once it catches up, the in-trail mark gives way to the resting magnetic
         // mark at the foot of the trail (below).
-        const isWorkingGroup = executing && seenMessage && i === lastIdx;
-        const isStreamingGroup = isWorkingGroup && streaming;
+        // While analyzing, the reasoning group itself is the live "running" group:
+        // the working mark rides its newest revealed step and stays there until
+        // analysis settles (it doesn't require a preceding message like work does).
+        const isAnalyzingGroup = analyzing && i === lastActsIdx;
+        // A case executing autonomously (no operator message this session) makes
+        // its single trail group the live working group too.
+        const isAutonomousWorking = executing && outbound.length === 0 && i === lastActsIdx;
+        const isWorkingGroup = isAnalyzingGroup || isAutonomousWorking || (executing && seenMessage && i === lastIdx);
+        const isStreamingGroup = isWorkingGroup && (streaming || isAnalyzingGroup);
+        // Once a (non-analyzing) working group catches up, it holds its own mark
+        // and settles it: the SAME mark glides just below the last step and morphs
+        // lines → magnetic, rather than disappearing while a separate foot mark
+        // pops in below. Analysis never settles here — it hands off to the awaiting
+        // state's foot mark instead.
+        const groupSettling = isWorkingGroup && !isAnalyzingGroup && !streaming && !resolved;
+        const markIndex = (isStreamingGroup || groupSettling) ? g.milestones.length - 1 : undefined;
         // Collapse a work group (one that followed a sent message) once it's no
         // longer the live working group — i.e. Ultron has finished it and moved on
         // to a response (a follow-up decision or the resolution). It stays expanded
@@ -576,7 +839,8 @@ export function UltronActivityCards({ thread, outbound = [] }: { thread: ThreadI
             milestones={g.milestones}
             typingIndex={i === lastActsIdx && typingOn ? g.milestones.length - 1 : undefined}
             collapsed={collapsed}
-            workingIndex={isStreamingGroup ? g.milestones.length - 1 : undefined}
+            workingIndex={markIndex}
+            settled={groupSettling}
           />
         );
       })}
@@ -692,6 +956,97 @@ const Card = styled.div<{ $expanded: boolean }>`
       ? 'linear-gradient(to left, var(--color-slate-border-secondary) 0%, color-mix(in srgb, var(--color-slate-border-secondary) 35%, transparent) 100%)'
       : 'transparent')}; }
   }
+`;
+
+/* The active "Working" segment breathes to read as in-progress. */
+/* The current segment's fill "draws" across left→right, then resets — reads as
+   an active, in-progress bar rather than a static fill. */
+const stepDraw = keyframes`
+  0%        { transform: scaleX(0); }
+  60%, 100% { transform: scaleX(1); }
+`;
+
+/* Progress steppers card — the lifecycle stepper lifted into its own flat
+   surface below the event card. Matches the detached analyzing card's chrome
+   (flat bg-primary, lg radius, no border/shadow) so it threads cleanly into the
+   feed. */
+const StepperCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+  background: var(--color-bg-primary);
+  border-radius: var(--radius-lg);
+`;
+
+/* Lifecycle stepper — a row of four labelled segments that advance with the
+   case: Analyzed → Plan proposed → Working → Resolved. Done and current segments
+   fill with the card tone; upcoming ones stay on the track. The current segment
+   pulses while the case is actively working. */
+const Stepper = styled.div`
+  display: flex;
+  gap: var(--space-2);
+
+  /* Done segments fill solid; the current segment's fill lives on its ::after so
+     it can animate (draw across) over the track. */
+  &[data-tone='orange'] [data-state='done'] > span:first-child,
+  &[data-tone='orange'] [data-state='current'] > span:first-child::after { background: var(--color-orange-bg-secondary); }
+  &[data-tone='green']  [data-state='done'] > span:first-child,
+  &[data-tone='green']  [data-state='current'] > span:first-child::after { background: var(--color-green-bg-secondary); }
+  &[data-tone='slate']  [data-state='done'] > span:first-child,
+  &[data-tone='slate']  [data-state='current'] > span:first-child::after { background: var(--color-slate-bg-secondary); }
+
+  /* The current step's label reads as the live one; done/upcoming stay muted. */
+  [data-state='current'] > span:last-child {
+    color: var(--color-content-primary);
+    font-weight: var(--font-weight-medium);
+  }
+
+  /* The current segment "draws" its fill across, looping, to read as in-progress. */
+  [data-state='current'] > span:first-child::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    transform-origin: left;
+    animation: ${stepDraw} 1.6s var(--ease-default) infinite;
+  }
+
+  /* The terminal (Resolved) step is a settled end state — fill it statically. */
+  &[data-terminal] [data-state='current'] > span:first-child::after {
+    animation: none;
+    transform: scaleX(1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-state='current'] > span:first-child::after { animation: none; transform: scaleX(1); }
+  }
+`;
+
+const Step = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+`;
+
+const StepBar = styled.span`
+  position: relative;
+  height: 3px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-tertiary);
+  overflow: hidden;
+`;
+
+const StepLabel = styled.span`
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-content-inverse-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `;
 
 /* Detached actionable card — the prompt + decision buttons, docked at the page
@@ -815,8 +1170,10 @@ const TrailInner = styled.div`
 const CardBody = styled.div`
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
-  padding: var(--space-3);
+  gap: var(--space-4);
+  /* 8px inset all around — a tighter body so the conclusion/prompt sit closer
+     to the card edge. */
+  padding: var(--space-2);
   margin: var(--space-1);
   border-radius: var(--radius-md);
   background: var(--color-bg-primary);
@@ -832,11 +1189,32 @@ const Analyzing = styled.div`
   font-family: var(--font-sans);
 `;
 
-/* Mark + text row — the orbit mark centers on the headline + assessment. */
-const AnalyzingRow = styled.div`
+/* Mark + text row — the orbit mark centers on the headline + assessment. Doubles
+   as the collapsible group's toggle (reset button chrome), so it sits flush like
+   the activity-trail session header with a trailing chevron. */
+const AnalyzingRow = styled.div<{ $interactive?: boolean }>`
+  all: ${p => (p.$interactive ? 'unset' : 'revert')};
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  width: 100%;
+  box-sizing: border-box;
+  cursor: ${p => (p.$interactive ? 'pointer' : 'default')};
+
+  &:focus-visible {
+    box-shadow: 0 0 0 2px var(--color-border-focus);
+    border-radius: var(--radius-sm);
+  }
+`;
+
+/* Chevron points right when collapsed, rotates down when expanded — matches the
+   activity-trail session header's disclosure affordance. Pushed to the far right. */
+const AnalyzingChevron = styled.span`
+  display: inline-flex;
+  margin-left: auto;
+  color: var(--color-content-tertiary);
+  transition: transform var(--duration-base) var(--ease-default);
+  &[data-open] { transform: rotate(90deg); }
 `;
 
 /* Detached analyzing surface — the in-card thinking block lifted into its own
@@ -877,7 +1255,6 @@ const AnalyzingDetail = styled.span`
 const Stream = styled.div`
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
 `;
 
 /* Each step slides up + fades in as it arrives (so the card grows). */
@@ -886,13 +1263,58 @@ const streamIn = keyframes`
   to   { opacity: 1; transform: translateY(0); }
 `;
 
+/* Mirrors the activity trail's row: a left icon rail (mark + dashed connector)
+   beside a content column (headline + sub-context). */
 const StreamRow = styled.div`
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  align-items: stretch;
+  gap: var(--space-4);
   animation: ${streamIn} var(--duration-base) var(--ease-out);
 
   @media (prefers-reduced-motion: reduce) { animation: none; }
+`;
+
+const StreamIconCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: var(--space-8);
+`;
+
+/* Dashed vertical line linking one step's mark down to the next, matching the
+   activity trail's connector. */
+const StreamConnector = styled.span`
+  flex: 1;
+  width: 0;
+  margin: var(--space-1) 0;
+  border-left: 1.5px dashed var(--color-slate-border-tertiary);
+  mix-blend-mode: multiply;
+`;
+
+const StreamContent = styled.div<{ $last?: boolean }>`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-bottom: ${p => (p.$last ? '0' : 'var(--space-4)')};
+`;
+
+const StreamHeadline = styled.span`
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-snug);
+  color: var(--color-content-primary);
+`;
+
+const StreamDetail = styled.p`
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--line-height-normal);
+  color: var(--color-content-tertiary);
 `;
 
 const StreamMark = styled.span<{ $done?: boolean }>`
@@ -948,13 +1370,6 @@ const RestingMark = styled.div<{ $leaving?: boolean }>`
   @media (prefers-reduced-motion: reduce) { animation: none; }
 `;
 
-const StreamText = styled.span<{ $done?: boolean }>`
-  font-family: var(--font-sans);
-  font-size: var(--text-xs);
-  line-height: var(--line-height-relaxed);
-  color: ${p => (p.$done ? 'var(--color-content-tertiary)' : 'var(--color-content-secondary)')};
-`;
-
 /* DEMO ONLY — manual trigger to flip an analyzing case to Needs approval.
    Sits at the content-left edge, on the same rail as the thinking-stream marks. */
 const DemoTrigger = styled(Button)`
@@ -986,6 +1401,135 @@ const RecordList = styled.div`
   gap: var(--space-2);
 `;
 
+/* Plan tasks — the decision broken into discrete steps, each a bordered row
+   matching the candidate cards' weight. */
+const TaskList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+`;
+
+const TaskRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-opaque);
+  border-radius: var(--radius-button);
+`;
+
+/* Numbered step marker — a small circle carrying the task's order. */
+const TaskMarker = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--space-6);
+  height: var(--space-6);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-tertiary);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-content-secondary);
+`;
+
+const TaskLabel = styled.span`
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-snug);
+  color: var(--color-content-primary);
+`;
+
+/* Trailing slot — the candidate avatar stack + count, right-aligned. */
+const TaskTrailing = styled.div`
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+`;
+
+const TaskCount = styled.span`
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--line-height-snug);
+  color: var(--color-content-inverse-tertiary);
+  white-space: nowrap;
+`;
+
+/* Overlapping avatar group — each avatar tucks under the previous one, ringed in
+   the card surface so the overlap reads as a stack. */
+const Stack = styled.div`
+  display: flex;
+  align-items: center;
+`;
+
+const StackItem = styled.span`
+  display: inline-flex;
+  border-radius: var(--radius-full);
+  box-shadow: 0 0 0 2px var(--color-bg-primary);
+
+  &:not(:first-child) { margin-left: calc(var(--space-2) * -1); }
+`;
+
+/* "+N" overflow chip — same diameter as an xs avatar, tucked under the stack. */
+const StackOverflow = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  margin-left: calc(var(--space-2) * -1);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-tertiary);
+  box-shadow: 0 0 0 2px var(--color-bg-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs, 10px);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-content-secondary);
+`;
+
+/* Analysis-result line with a leading status icon. The icon rides a 32px slot
+   (same rail as the activity-trail steps), top-aligned so it pins to the first
+   line as the conclusion wraps. */
+const ResultRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+`;
+
+/* 32px leading-icon slot — the 16px status icon centers within it, lining the
+   conclusion up on the same icon rail as the activity trail below. Tinted to
+   match the card tone so the glyph echoes the surface's status color. */
+const ResultIconSlot = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--space-8);
+  height: var(--space-8);
+
+  &[data-tone='orange'] { color: var(--color-orange-content-primary); }
+  &[data-tone='green']  { color: var(--color-green-content-primary); }
+  &[data-tone='slate']  { color: var(--color-slate-content-primary); }
+`;
+
+/* Ultron's one-line analysis conclusion, shown in the event card's white body
+   while the case awaits a decision. Mirrors the resolved card's outcome line. */
+const AnalysisResult = styled.p`
+  margin: 0;
+  /* Center the text against the 32px icon slot when it's a single line. */
+  align-self: center;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--line-height-normal);
+  color: var(--color-content-secondary);
+`;
+
 const Prompt = styled.p`
   margin: 0;
   /* Alloy "Label large" type style */
@@ -1002,12 +1546,22 @@ const Actions = styled.div`
   align-items: center;
   gap: var(--space-2);
   flex-wrap: wrap;
+  margin-top: var(--space-3);
 `;
 
 const Pill = styled(Button)`
   border-radius: var(--radius-full);
   padding-left: var(--space-3);
   padding-right: var(--space-3);
+
+  /* Primary pill rides the inverse surface token so it flips with the theme
+     (dark fill in light mode, light fill in dark mode). !important is needed to
+     beat Alloy's higher-specificity dark-scope rule, which otherwise forces the
+     fill back to the page surface token. */
+  &[data-variant='primary'] {
+    background: var(--color-bg-inverse-primary) !important;
+    color: var(--color-content-inverse-primary) !important;
+  }
 
   /* Outlined (secondary) pills get a strong dark border. */
   &[data-variant='tertiary'] {
@@ -1037,9 +1591,9 @@ const OutboundRow = styled.div`
   justify-content: flex-end;
 `;
 
-/* Each sent bubble slides up + fades in as it's appended. */
+/* Each sent bubble glides up + fades in from fully transparent as it's appended. */
 const bubbleIn = keyframes`
-  from { opacity: 0; transform: translateY(var(--space-2)); }
+  from { opacity: 0; transform: translateY(var(--space-4)); }
   to   { opacity: 1; transform: translateY(0); }
 `;
 
@@ -1052,7 +1606,7 @@ const OutboundBubble = styled.div`
   padding: var(--space-2) var(--space-4);
   background: var(--color-bg-inverse-primary);
   border-radius: var(--radius-full);
-  animation: ${bubbleIn} var(--duration-base) var(--ease-out);
+  animation: ${bubbleIn} 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
 
   @media (prefers-reduced-motion: reduce) { animation: none; }
 `;

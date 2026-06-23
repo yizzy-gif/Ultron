@@ -25,21 +25,21 @@ export const ultronThreads: ThreadItem[] = [
   // ── Analyzing (events just in; Ultron is still thinking — no decision yet) ──
   {
     id: 'surge_callouts',
-    name: 'Multi Call-Out Surge',
-    title: 'Three call-outs reported at Riverside in the past hour',
+    name: 'RN Call-Out Reported',
+    title: 'Derek Hayes called out of this morning’s RN shift',
     capability: 'Coverage Recovery',
     status: 'analyzing',
     severity: 'high',
-    event: 'Three staff called out within an hour at Riverside Memorial.',
-    assessment: 'Weighing replacement pools, overtime budget, and which shifts are most at risk before recommending a plan.',
-    recommendation: 'Pull from the float pool and notify the affected managers.',
+    event: 'Derek Hayes called out of his RN shift this morning at 7:00 AM.',
+    assessment: 'Weighing the replacement pool, overtime budget, and how exposed the shift is before recommending a plan.',
+    recommendation: 'Pull from the float pool and notify the affected manager.',
     outcome: null,
     workflowOpportunity: null,
     timeline: [
-      { state: 'detected', headline: 'Three call-outs clustered within an hour', done: true },
+      { state: 'detected', headline: 'RN called out of this morning’s shift', done: true },
       { state: 'assessment', headline: 'Assessing coverage impact and options', done: false },
     ],
-    actions: ['Pull from float pool', 'Notify managers'],
+    actions: ['Pull from float pool', 'Notify manager'],
     timestamp: '2m ago',
   },
   {
@@ -90,6 +90,7 @@ export const ultronThreads: ThreadItem[] = [
     severity: 'high',
     event: 'Maria Lopez called out of her RN shift tomorrow at 8:00 AM.',
     assessment: 'Coverage risk detected. No replacement assigned and shift begins in 18 hours.',
+    analysisResult: 'The unit would fall below minimum safe staffing with 16 hours’ notice.',
     recommendation: 'Contact top replacement candidates and notify manager.',
     outcome: null,
     workflowOpportunity: 'Automate future call-out recovery.',
@@ -112,6 +113,7 @@ export const ultronThreads: ThreadItem[] = [
     severity: 'high',
     event: 'John Smith failed to clock in 20 minutes after shift start.',
     assessment: 'Likely no-show. Coverage risk detected.',
+    analysisResult: 'His recent pattern points to a no-show, leaving today’s 7:00 AM shift uncovered.',
     recommendation: 'Contact employee, notify manager, begin replacement search.',
     outcome: null,
     workflowOpportunity: 'Automate no-show response.',
@@ -133,6 +135,7 @@ export const ultronThreads: ThreadItem[] = [
     severity: 'medium',
     event: 'Employee clocked in but never clocked out.',
     assessment: 'Payroll discrepancy detected.',
+    analysisResult: 'Left uncorrected, the open punch would overpay this timesheet and miss the payroll cutoff.',
     recommendation: 'Approve estimated end time.',
     outcome: null,
     workflowOpportunity: 'Automate timesheet exception handling.',
@@ -157,6 +160,7 @@ export const ultronThreads: ThreadItem[] = [
     severity: 'medium',
     event: 'Weekend RN shift has remained open for 5 days.',
     assessment: 'Fill probability is only 22% at current pay rate.',
+    analysisResult: 'At the current rate the shift has a 22% chance of filling before the weekend.',
     recommendation: 'Increase pay by $3/hr and notify nearby qualified workers.',
     outcome: null,
     workflowOpportunity: 'Auto-adjust rates when fill probability falls below threshold.',
@@ -177,6 +181,7 @@ export const ultronThreads: ThreadItem[] = [
     severity: 'medium',
     event: 'Projected overtime exceeds budget by $4,200 this week.',
     assessment: 'Two employees account for most projected overtime.',
+    analysisResult: 'Two RNs are driving a $4,200 overtime overage this week unless schedules are rebalanced.',
     recommendation: 'Rebalance schedules.',
     outcome: null,
     workflowOpportunity: 'Automate overtime optimization recommendations.',
@@ -198,6 +203,7 @@ export const ultronThreads: ThreadItem[] = [
     severity: 'medium',
     event: 'High-priority facility order is not filling.',
     assessment: 'Pay rate is below local market average.',
+    analysisResult: 'The order has stalled because its rate sits below the local market, narrowing the candidate pool.',
     recommendation: 'Increase rate and expand search radius.',
     outcome: null,
     workflowOpportunity: 'Automate fill strategy optimization.',
@@ -219,6 +225,7 @@ export const ultronThreads: ThreadItem[] = [
     severity: 'low',
     event: 'New CNA applicant submitted an application.',
     assessment: '92% match for open CNA position.',
+    analysisResult: 'The applicant is a 92% match for the open full-time CNA role and is ready to advance.',
     recommendation: 'Schedule interview.',
     outcome: null,
     workflowOpportunity: 'Auto-advance qualified applicants.',
@@ -256,22 +263,23 @@ export const ultronThreads: ThreadItem[] = [
   {
     id: 'attendance_risk',
     name: 'Attendance Risk Detected',
-    title: 'Attendance trend worsening for one employee',
+    title: 'attendance trend worsening for one employee',
     capability: 'Workforce Insights',
-    status: 'monitoring',
-    severity: 'low',
-    event: 'Employee has 4 late arrivals this month.',
-    assessment: 'Attendance trend worsening.',
-    recommendation: 'Manager coaching conversation recommended.',
+    status: 'in_progress',
+    severity: 'medium',
+    event: 'Tyler Brooks has 4 late arrivals this month, up from 1 last month.',
+    assessment: 'Attendance is trending down — the pattern is worsening month-over-month.',
+    analysisResult: 'Four late arrivals this month cross the coaching threshold — an early check-in can reverse the trend.',
+    recommendation: 'Open a coaching note and notify the manager.',
     outcome: null,
     workflowOpportunity: 'Attendance escalation workflow.',
     timeline: [
       { state: 'detected', headline: '4 late arrivals this month', done: true },
-      { state: 'assessment', headline: 'Trend is worsening month-over-month', done: true },
-      { state: 'monitoring', headline: 'Watching for further attendance slips', done: false },
+      { state: 'assessment', headline: 'Trend worsening month-over-month', done: true },
+      { state: 'execution', headline: 'Opening a coaching note', done: false },
     ],
-    actions: ['Open Coaching Note'],
-    timestamp: '4h ago',
+    actions: ['Review note', 'Open coaching note'],
+    timestamp: 'Working now',
   },
   {
     id: 'credential_expiring',
@@ -328,6 +336,7 @@ export const ultronThreads: ThreadItem[] = [
     severity: 'high',
     event: 'Automated outreach closed with no acceptances.',
     assessment: 'No candidates accepted; the shift remains uncovered and needs a decision.',
+    analysisResult: 'Outreach to 12 candidates closed with no acceptances; tonight’s 11:00 PM shift is still uncovered.',
     recommendation: 'Offer a $5/hr incentive or escalate to the on-call pool.',
     outcome: null,
     workflowOpportunity: null,
@@ -346,6 +355,7 @@ export const ultronThreads: ThreadItem[] = [
 /** Person each case is about — drives the deck card's profile avatar (with an
  *  initials fallback when the photo can't load). */
 export const THREAD_SUBJECTS: Record<string, string> = {
+  surge_callouts: 'Derek Hayes',
   callout_recovery: 'Maria Lopez',
   no_show: 'John Smith',
   payroll_exception: 'Devon Carter',
@@ -363,7 +373,7 @@ export const THREAD_SUBJECTS: Record<string, string> = {
 /** Glanceable case metadata for the collapsed card subtitle: a scannable
  *  Role · Shift time · Location line in place of the prose assessment. DEMO ONLY. */
 export const THREAD_META: Record<string, { role: string; shiftTime: string; location: string }> = {
-  multi_callout:      { role: 'RN · CNA',  shiftTime: 'Today · 7:00 AM',     location: 'Riverside Memorial' },
+  surge_callouts:     { role: 'RN',        shiftTime: 'Today · 7:00 AM',     location: 'Riverside Memorial' },
   ot_spike:           { role: 'RN',        shiftTime: 'Nights · this week',  location: 'Memorial East' },
   cred_sweep:         { role: '6 staff',   shiftTime: 'Next 30 days',        location: '2 facilities' },
   callout_recovery:   { role: 'RN',        shiftTime: 'Tomorrow · 8:00 AM',  location: 'Riverside Memorial' },
@@ -403,60 +413,76 @@ export function threadDisplayTitle(thread: ThreadItem): string {
 export const threadAvatarUrl = (id: string): string =>
   `https://i.pravatar.cc/80?u=${id}`;
 
+/** A single "thinking" step Ultron emits while analyzing a fresh event — a
+ *  short headline plus a line of sub-context explaining what it found, so the
+ *  stream reads like the activity trail (headline + detail) rather than a bare
+ *  checklist. */
+export interface AnalyzingStep {
+  /** Leading icon when the step is folded into the accumulated activity trail. */
+  icon: WorkingIcon;
+  headline: string;
+  detail: string;
+}
+
 /** Short "thinking" steps Ultron emits while analyzing a fresh event. They
  *  reveal one at a time (accumulating, growing the analyzing card) before the
  *  case flips to Needs approval. Falls back to a generic sequence. */
-export const ANALYZING_ACTIVITIES: Record<string, string[]> = {
+export const ANALYZING_ACTIVITIES: Record<string, AnalyzingStep[]> = {
   surge_callouts: [
-    'Pulling float-pool availability',
-    'Checking overtime budget headroom',
-    'Ranking shifts by coverage risk',
-    'Drafting a recommended plan',
+    { icon: 'edit',  headline: 'Pulling float-pool availability', detail: 'Scanned 14 float-pool RNs — 6 are free and credentialed for the affected unit.' },
+    { icon: 'rate',  headline: 'Checking overtime budget headroom', detail: 'The week sits at 82% of its overtime budget, leaving room for a premium shift before the cap.' },
+    { icon: 'chart', headline: 'Gauging the shift’s coverage risk', detail: 'The 7:00 AM ICU block falls below minimum safe staffing until the slot is refilled.' },
+    { icon: 'done',  headline: 'Drafting a recommended plan', detail: 'Pairing the open shift with the strongest float match, plus a heads-up to the affected manager.' },
   ],
   ot_spike: [
-    'Reading the week’s overtime ledger',
-    'Modeling schedule swaps',
-    'Checking on-call pool capacity',
-    'Estimating disruption per option',
+    { icon: 'chart', headline: 'Reading the week’s overtime ledger', detail: 'Two RNs account for $4,200 of the projected overage — most of the spike traces back to the night shift.' },
+    { icon: 'chart', headline: 'Modeling schedule swaps', detail: 'Tested 9 swap combinations; three cut overtime without breaching rest rules.' },
+    { icon: 'edit',  headline: 'Checking on-call pool capacity', detail: 'Four on-call RNs are available to absorb two of the over-budget slots this week.' },
+    { icon: 'done',  headline: 'Estimating disruption per option', detail: 'Ranked the options by hours moved and staff impact — the lowest-disruption fix shifts just two slots.' },
   ],
   cred_sweep: [
-    'Listing credentials nearing expiry',
-    'Checking renewal eligibility',
-    'Mapping affected upcoming shifts',
-    'Preparing reminder recipients',
+    { icon: 'alert', headline: 'Listing credentials nearing expiry', detail: 'Found 11 licenses lapsing in the next 30 days across 8 employees.' },
+    { icon: 'edit',  headline: 'Checking renewal eligibility', detail: '9 of the 11 are eligible to renew now; two need a manager sign-off first.' },
+    { icon: 'chart', headline: 'Mapping affected upcoming shifts', detail: 'Lapses would put 6 scheduled shifts out of compliance over the next two weeks.' },
+    { icon: 'done',  headline: 'Preparing reminder recipients', detail: 'Grouped reminders by employee and manager so each goes out with the right shift context.' },
+  ],
+  attendance_risk: [
+    { icon: 'chart', headline: 'Reviewing the attendance history', detail: 'Pulled 90 days of punches — the late arrivals cluster on Monday early shifts.' },
+    { icon: 'alert', headline: 'Checking the attendance policy', detail: 'Four lates in a month crosses the coaching threshold in the attendance policy.' },
+    { icon: 'done',  headline: 'Shaping a coaching plan', detail: 'An early, private coaching conversation is the lowest-friction way to reverse the trend.' },
   ],
 };
 
-const GENERIC_ANALYZING = [
-  'Reading the event',
-  'Gathering related records',
-  'Weighing the options',
-  'Preparing a recommendation',
+const GENERIC_ANALYZING: AnalyzingStep[] = [
+  { icon: 'alert', headline: 'Reading the event', detail: 'Parsing what changed and which people, shifts, and policies it touches.' },
+  { icon: 'clock', headline: 'Gathering related records', detail: 'Pulling the schedules, availability, and history relevant to this case.' },
+  { icon: 'chart', headline: 'Weighing the options', detail: 'Comparing the viable responses by cost, coverage, and disruption.' },
+  { icon: 'done',  headline: 'Preparing a recommendation', detail: 'Shaping the strongest option into a plan you can approve in one step.' },
 ];
 
 /** The analyzing step sequence for a case (thread-specific or generic). */
-export const analyzingSteps = (id: string): string[] =>
+export const analyzingSteps = (id: string): AnalyzingStep[] =>
   ANALYZING_ACTIVITIES[id] ?? GENERIC_ANALYZING;
 
 /** The recommendation phrased as a question — a clear call to action that the
  *  decision buttons answer. Shown as the card prompt (falls back to the
  *  imperative `recommendation` if missing). */
 export const THREAD_PROMPTS: Record<string, string> = {
-  surge_callouts: 'Want me to pull from the float pool and notify the affected managers?',
-  ot_spike: 'Want me to rebalance the night shift and move two slots to on-call?',
-  cred_sweep: 'Want me to send renewal reminders and flag the affected shifts?',
-  callout_recovery: 'Want me to contact the top replacement candidates and notify the manager?',
-  no_show: 'Want me to reach out to John, notify the manager, and start a replacement search?',
+  surge_callouts: 'Run the coverage recovery plan?',
+  ot_spike: 'Bring overtime back under budget?',
+  cred_sweep: 'Clear the expiring credentials?',
+  callout_recovery: 'Start the coverage recovery?',
+  no_show: 'Cover the no-show?',
   payroll_exception: 'Approve the estimated end time?',
-  fill_risk: 'Want me to raise pay by $3/hr and notify nearby qualified workers?',
-  overtime_risk: 'Want me to rebalance the schedules to cut the projected overtime?',
-  order_fill_strategy: 'Want me to raise the rate and expand the search radius?',
-  candidate_match: 'Want me to schedule an interview with this applicant?',
-  credential_expiring: 'Want me to send a renewal reminder and notify the manager?',
-  attendance_risk: 'Want me to open a coaching note for the manager?',
-  retention_risk: 'Want me to schedule a manager check-in?',
+  fill_risk: 'Improve this shift’s fill odds?',
+  overtime_risk: 'Cut the projected overtime?',
+  order_fill_strategy: 'Widen the candidate pool?',
+  candidate_match: 'Schedule the interview?',
+  credential_expiring: 'Handle the renewal?',
+  attendance_risk: 'Start a coaching note?',
+  retention_risk: 'Schedule a manager check-in?',
   autonomous_callout: 'No action needed — Ultron handled this automatically.',
-  unfilled_shift: 'Want me to offer a $5/hr incentive and escalate to the on-call pool?',
+  unfilled_shift: 'Push to fill this shift?',
 };
 
 /** Real, scenario-specific milestones shown one-by-one while a thread executes
@@ -479,8 +505,8 @@ export const WORKING_ACTIVITIES: Record<string, WorkingMilestone[]> = {
   ],
   no_show: [
     { icon: 'send',  headline: 'Contacting John and replacements', detail: 'Outreach sent; manager notified.' },
-    { icon: 'clock', headline: 'Tracking responses', detail: 'Waiting on candidate confirmations.' },
-    { icon: 'done',  headline: 'Replacement confirmed', detail: 'Coverage secured for the shift.' },
+    { icon: 'clock', headline: 'Tracking responses', detail: 'Two replacements responded; awaiting confirmation.' },
+    { icon: 'done',  headline: 'Priya Patel is the strongest match', detail: 'Available for the day shift — ready to assign.' },
   ],
   payroll_exception: [
     { icon: 'clock', headline: 'Estimating end time', detail: 'Deriving from schedule and punch history.' },
@@ -512,6 +538,11 @@ export const WORKING_ACTIVITIES: Record<string, WorkingMilestone[]> = {
     { icon: 'send',  headline: 'Escalating to the on-call pool', detail: 'Notifying available on-call RNs.' },
     { icon: 'done',  headline: 'On-call RN accepted', detail: 'Coverage restored with the incentive.' },
   ],
+  attendance_risk: [
+    { icon: 'edit', headline: 'Opening a coaching note', detail: 'Drafting a private note with the late-arrival dates and pattern.' },
+    { icon: 'send', headline: 'Notifying the manager', detail: 'Sharing the note and the trend with Rachel Adler.' },
+    { icon: 'done', headline: 'Coaching note shared', detail: 'Manager has the context to hold an early check-in.' },
+  ],
 };
 
 /** Multi-step cases: after the first action's work completes, Ultron asks a
@@ -534,15 +565,25 @@ export interface ThreadFollowUp {
 }
 
 export const THREAD_FOLLOWUPS: Record<string, ThreadFollowUp> = {
+  no_show: {
+    prompt: 'Priya Patel is available — a strong match. Assign her to cover the shift?',
+    actions: ['Review', 'Assign Priya'],
+    working: [
+      { icon: 'edit',  headline: 'Assigning Priya to the shift', detail: '' },
+      { icon: 'clock', headline: 'Updating the schedule', detail: '' },
+      { icon: 'done',  headline: 'Coverage confirmed', detail: '' },
+    ],
+    record: { eyebrow: 'RN', title: 'Priya Patel', meta: ['Available now', 'Day shift', 'Strong match'], avatarSeed: 'priya_patel' },
+  },
   callout_recovery: {
-    prompt: 'Sarah Kim (94% match) is available. Assign her to the shift?',
+    prompt: 'Sarah Kim is available. Assign her to the shift?',
     actions: ['Review', 'Assign Sarah'],
     working: [
       { icon: 'edit',  headline: 'Assigning Sarah to the shift', detail: '' },
       { icon: 'clock', headline: 'Updating the schedule', detail: '' },
       { icon: 'done',  headline: 'Coverage confirmed', detail: '' },
     ],
-    record: { eyebrow: 'RN', title: 'Sarah Kim', meta: ['Los Angeles', '4 yr Exp', 'Available immediately'], avatarSeed: 'sarah_kim' },
+    record: { eyebrow: 'RN', title: 'Sarah Kim', meta: ['94% match', 'Los Angeles', '4 yr Exp', 'Available immediately'], avatarSeed: 'sarah_kim' },
   },
   fill_risk: {
     prompt: 'Two RNs applied. Approve the top applicant for the shift?',
@@ -579,6 +620,66 @@ export const THREAD_RECORDS: Record<string, RecordRef | RecordRef[]> = {
   payroll_exception: { eyebrow: 'Timesheet', title: 'Devon Carter', meta: ['Missing clock-out', 'Yesterday'], avatarSeed: 'payroll_exception' },
   candidate_match:   { eyebrow: 'CNA Applicant', title: 'Aisha Khan', meta: ['92% match', '2 yr Exp', 'Available'], avatarSeed: 'candidate_match' },
   unfilled_shift:    { eyebrow: 'Open RN shift', title: 'Saturday · 7:00 PM', meta: ['Night', '1 RN needed', 'No replacement'], avatarSeed: 'unfilled_shift' },
+  attendance_risk:   { eyebrow: 'CNA', title: 'Tyler Brooks', meta: ['4 late arrivals', 'Avg 12 min late', 'Early shifts'], avatarSeed: 'attendance_risk' },
+};
+
+/** A discrete step in a decision's plan — what Ultron will run, in order, if the
+ *  operator approves. Replaces the flat candidate-card list on the decision
+ *  surface so a bundled "do A and B" prompt reads as its constituent tasks. */
+export interface PlanTask {
+  label: string;
+  /** When set, the task surfaces the thread's candidate records as a stacked
+   *  avatar group (the people it would contact) instead of plain text. */
+  showsCandidates?: boolean;
+  /** A single person the task acts on (e.g. the manager to notify) — shown as
+   *  one avatar + name in the trailing slot. */
+  person?: { name: string; avatarSeed: string };
+}
+
+/** Per-thread task breakdown for the docked decision surface. A thread with an
+ *  entry here renders its plan as tasks; others keep the candidate-card list. */
+export const THREAD_TASKS: Record<string, PlanTask[]> = {
+  callout_recovery: [
+    { label: 'Contact top candidates', showsCandidates: true },
+    { label: 'Notify the manager', person: { name: 'Rachel Adler', avatarSeed: 'rachel_adler' } },
+  ],
+  surge_callouts: [
+    { label: 'Pull from the float pool' },
+    { label: 'Notify the affected manager', person: { name: 'Rachel Adler', avatarSeed: 'rachel_adler' } },
+  ],
+  ot_spike: [
+    { label: 'Rebalance the night shift' },
+    { label: 'Move two slots to on-call' },
+  ],
+  cred_sweep: [
+    { label: 'Send renewal reminders' },
+    { label: 'Flag the affected shifts' },
+  ],
+  no_show: [
+    { label: 'Reach out to John', person: { name: 'John Smith', avatarSeed: 'no_show' } },
+    { label: 'Notify the manager', person: { name: 'Rachel Adler', avatarSeed: 'rachel_adler' } },
+    { label: 'Start a replacement search' },
+  ],
+  fill_risk: [
+    { label: 'Raise pay by $3/hr' },
+    { label: 'Notify nearby qualified workers' },
+  ],
+  order_fill_strategy: [
+    { label: 'Raise the rate' },
+    { label: 'Expand the search radius' },
+  ],
+  credential_expiring: [
+    { label: 'Send a renewal reminder' },
+    { label: 'Notify the manager', person: { name: 'Rachel Adler', avatarSeed: 'rachel_adler' } },
+  ],
+  unfilled_shift: [
+    { label: 'Offer a $5/hr incentive' },
+    { label: 'Escalate to the on-call pool' },
+  ],
+  attendance_risk: [
+    { label: 'Open a coaching note' },
+    { label: 'Notify the manager', person: { name: 'Rachel Adler', avatarSeed: 'rachel_adler' } },
+  ],
 };
 
 /** The record a resolved thread fulfilled — the assigned/approved/hired person,
@@ -589,6 +690,7 @@ export const THREAD_RESOLVED_RECORDS: Record<string, RecordRef> = {
   fill_risk:          { eyebrow: 'RN · Approved',       title: 'Jordan Reyes', meta: ['Shift filled', '3 yr Exp'],                            avatarSeed: 'jordan_reyes' },
   candidate_match:    { eyebrow: 'CNA · Offer accepted', title: 'Aisha Khan',   meta: ['Onboarding started', '2 yr Exp'],                       avatarSeed: 'candidate_match' },
   autonomous_callout: { eyebrow: 'RN · Auto-assigned',  title: 'Daniel Brooks', meta: ['ICU · Night shift', '7:00 PM–7:00 AM', '6 yr Exp'],       avatarSeed: 'auto_fill' },
+  attendance_risk:    { eyebrow: 'CNA · Coaching opened', title: 'Tyler Brooks', meta: ['Note shared', 'Manager notified'],                       avatarSeed: 'attendance_risk' },
 };
 
 /** Past-activity breakdown shown (expandable) on a resolved card. A block is a
@@ -868,17 +970,12 @@ const THREAD_ACTIVITY: Record<string, ActivityMilestone[]> = {
     {
       icon: 'clock',
       headline: '4 late arrivals this month',
-      blocks: [{ text: 'Tyler Brooks has arrived late four times this month.' }],
+      blocks: [{ text: 'Tyler Brooks has arrived late four times this month — up from once last month.' }],
     },
     {
       icon: 'alert',
-      headline: 'Trend is worsening month-over-month',
+      headline: 'Trend worsening month-over-month',
       blocks: [{ bullets: ['Up from 1 late arrival last month', 'Averaging 12 minutes late', 'Concentrated on early shifts'] }],
-    },
-    {
-      icon: 'clock',
-      headline: 'Watching for further attendance slips',
-      blocks: [{ text: 'Ultron is monitoring for further slips before recommending a coaching escalation.' }],
     },
   ],
   unfilled_shift: [
@@ -927,13 +1024,20 @@ const STATE_DETAIL: Record<string, (t: ThreadItem) => string | null | undefined>
  *  exists, otherwise derived from the timeline — each step gets a detail block
  *  drawn from the thread's narrative so no milestone is left bare. */
 export function activityForThread(thread: ThreadItem): ActivityMilestone[] {
+  // Normalize for the dedupe check below — ignore case and trailing punctuation
+  // so "Two RNs called out…" and "Two RNs called out….​" count as the same line.
+  const norm = (s: string) => s.trim().replace(/[.\s]+$/, '').toLowerCase();
   return THREAD_ACTIVITY[thread.id]
     ?? thread.timeline.map(s => {
       const detail = STATE_DETAIL[s.state]?.(thread) ?? thread.assessment;
+      // Drop the sub-context when it just restates the headline (e.g. an
+      // event-spawned case whose detected detail is the title verbatim) — a
+      // repeated line reads as redundant noise.
+      const redundant = detail != null && norm(detail) === norm(s.headline);
       return {
         icon: STATE_ICON[s.state] ?? 'clock',
         headline: s.headline,
-        blocks: detail ? [{ text: detail }] : undefined,
+        blocks: detail && !redundant ? [{ text: detail }] : undefined,
       };
     });
 }
@@ -955,6 +1059,20 @@ const USAGE_BY_ICON: Record<WorkingIcon, ActivityUsage> = {
 
 /** The tools / skills / data an activity used, derived from its icon (kind). */
 export const activityUsage = (icon: WorkingIcon): ActivityUsage => USAGE_BY_ICON[icon] ?? USAGE_BY_ICON.clock;
+
+/** The combined, deduped usage across several activities — the full set of tools,
+ *  skills, and data that applied to ALL activities in a group. Surfaced once,
+ *  under the group's last activity, so it reads as the group's whole toolkit
+ *  rather than a single step's. Order follows first appearance across the group. */
+export const aggregateUsage = (icons: WorkingIcon[]): ActivityUsage => {
+  const merge = (pick: (u: ActivityUsage) => string[]) =>
+    [...new Set(icons.flatMap(i => pick(activityUsage(i))))];
+  return {
+    tools: merge(u => u.tools),
+    skills: merge(u => u.skills),
+    data: merge(u => u.data),
+  };
+};
 
 // ── Live landing — incoming signal stream ──────────────────────────────────
 // The Live landing feed is a conveyor of incoming operational signals Ultron is
@@ -1089,4 +1207,5 @@ export const RESOLVE_OUTCOMES: Record<string, string> = {
   order_fill_strategy: 'Rate raised and radius expanded — three candidates applied.',
   candidate_match: 'Offer accepted — candidate hired.',
   unfilled_shift: 'On-call RN accepted with the incentive. Coverage restored.',
+  attendance_risk: 'Coaching note shared with the manager. Watching for improvement.',
 };

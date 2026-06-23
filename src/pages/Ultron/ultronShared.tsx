@@ -145,6 +145,22 @@ export const hasMultipleCtas = (prompt: string): boolean =>
 /** Combined primary label shown when a prompt bundles several actions. */
 export const DO_IT_ALL_LABEL = 'Approve all';
 
+/** Split a bundled prompt/recommendation into its discrete step labels — used to
+ *  render plan step cards for cases that have no authored task breakdown (e.g.
+ *  detected/spawned cases, whose prompt is their imperative recommendation).
+ *  Strips the "Want me to …?" wrapper and trailing punctuation, then splits on
+ *  the conjoined clauses ("X, Y, and Z" / "X and Y"). Returns [] when there's
+ *  only one clause (nothing to break into steps). */
+export const deriveStepLabels = (prompt: string): string[] => {
+  const body = prompt.trim().replace(/[?.]+$/, '').replace(/^want me to\s+/i, '');
+  const parts = body
+    .split(/\s*,\s*and\s+|\s*,\s*|\s+and\s+/i)
+    .map(p => p.trim())
+    .filter(Boolean);
+  if (parts.length < 2) return [];
+  return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1));
+};
+
 // ── Stream filter (lifecycle SegmentedControl) ───────────────────────────────
 
 export type StreamFilter = 'all' | 'awaiting' | 'executing' | 'resolved';

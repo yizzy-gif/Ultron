@@ -159,7 +159,7 @@ function ActivitySession({ milestones, typingIndex, workingIndex, settled, defau
   // activities so it stays stable across renders (no Math.random).
   const thinkSecs = count * 6 + (milestones.reduce((s, m) => s + m.headline.length, 0) % 18);
   const thought = thinkSecs < 60 ? `${thinkSecs} sec` : `${Math.round(thinkSecs / 60)} min`;
-  const summary = `${count} ${count === 1 ? 'activity' : 'activities'} · thought for ${thought}`;
+  const summary = `Thought for ${thought}`;
 
   return (
     <SessionShell>
@@ -450,13 +450,11 @@ const cardIn = keyframes`
   to   { opacity: 1; transform: translateY(0); }
 `;
 
-/* A session — one collapsible card holding a run of activities. */
+/* A session — one collapsible run of activities, sitting flush in the feed (no
+   padded card frame) so its header and steps line up with the rest of the trail. */
 const SessionShell = styled.div`
   display: flex;
   flex-direction: column;
-  padding: var(--space-3);
-  background: var(--color-bg-primary);
-  border-radius: var(--radius-lg);
   font-family: var(--font-sans);
   animation: ${cardIn} var(--duration-base) var(--ease-out);
 

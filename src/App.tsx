@@ -287,6 +287,7 @@ export default function App() {
           section={homeSection}
           analyzedIds={ultron.analyzedIds}
           outboundByThread={ultron.outboundByThread}
+          chatByThread={ultron.chatByThread}
           selectedId={ultron.selectedId}
           onDecide={ultron.decide}
           onAction={ultron.commit}

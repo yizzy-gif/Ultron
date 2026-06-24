@@ -543,104 +543,101 @@ export interface AnalyzingStep {
  *  each event's "Analyzing event" checklist in the seed data. */
 export const ANALYZING_ACTIVITIES: Record<string, AnalyzingStep[]> = {
   shift_drop_maria: [
-    { icon: 'clock', headline: 'Read the dropped shift', detail: 'RN · Riverside · 2:00–10:00 PM · CPR required.' },
-    { icon: 'alert', headline: 'Checked the start window', detail: 'Starts in under 12 hours — this is an urgent fill.' },
-    { icon: 'chart', headline: 'Ran matching policies', detail: '8 available RNs, with no overtime or do-not-return conflicts.' },
+    { icon: 'clock', headline: 'Reviewed dropped shift', detail: 'I checked out the dropped shift: RN · Riverside Clinic · 2:00–10:00pm, in the ICU unit.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'The start time is in 4 hours, so this is an urgent fill — it might be too late to find a replacement, and more urgency or incentive may be needed to staff it now. First I’ll evaluate whether there are suitable replacements. I could reach out in ranked order, but as this is urgent let me contact the top 20 best replacements all at once. This has worked in the past, so I won’t suggest a bonus incentive at this time.' },
+    { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   timeoff_sofia: [
-    { icon: 'clock', headline: 'Read the request window', detail: 'Thu–Fri, with 2 assigned shifts inside it.' },
-    { icon: 'chart', headline: 'Ran coverage on both shifts', detail: 'Thursday is fine; Friday is thin.' },
-    { icon: 'alert', headline: 'Checked PTO balance + policy', detail: 'Balance is OK and there’s no blackout rule.' },
+    { icon: 'clock', headline: 'Reviewed time-off request', detail: 'I looked at Sofia’s request — Thursday and Friday off, with two assigned shifts falling inside the window.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Her PTO balance covers the request and there’s no blackout rule, so this is approvable. Running coverage on both shifts: Thursday stays fully covered, but Friday only has a single backup and reads thin. Rather than risk an uncovered shift, I’ll recommend approving Thursday outright and holding Friday for your call.' },
+    { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   document_kenji: [
-    { icon: 'edit',  headline: 'Opened and read the file', detail: 'It looks like a CPR certification.' },
-    { icon: 'clock', headline: 'Extracted the expiration date', detail: 'The credential expires in 3 weeks.' },
-    { icon: 'done',  headline: 'Matched the name to the uploader', detail: 'Confirmed it’s Kenji T.' },
+    { icon: 'clock', headline: 'Reviewed uploaded document', detail: 'I opened the file on Kenji’s profile and read it as a valid CPR certification.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'The name matches the uploader and the credential checks out, but it expires in 3 weeks. The right move is to file it as a CPR cert so the record is accurate, then set a renewal flag ahead of the expiry so it doesn’t lapse and block his shifts.' },
+    { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   application_priya: [
-    { icon: 'edit',  headline: 'Read the application', detail: 'Against the linked job — CNA · Night Shift · Downtown.' },
-    { icon: 'alert', headline: 'Checked required credentials', detail: 'CNA license valid; availability matches.' },
-    { icon: 'chart', headline: 'Scored against requirements', detail: 'Strong match — 92%.' },
+    { icon: 'clock', headline: 'Reviewed new application', detail: 'I read Priya’s application against the linked role: CNA · Night Shift · Downtown.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Her CNA license is valid and her availability matches the shift, scoring a 92% match — a strong lead. Rather than let it sit in the queue, I’ll screen it as qualified and reach out with an intro so we move on a good candidate before someone else does.' },
+    { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   new_shift_forklift: [
-    { icon: 'clock', headline: 'Read the new shift', detail: 'Forklift · certified only · 6:00 AM.' },
-    { icon: 'chart', headline: 'Ran matching policies', detail: '11 certified, available workers.' },
-    { icon: 'done',  headline: 'Ranked by proximity + reliability', detail: 'Surfaced the top 6.' },
+    { icon: 'clock', headline: 'Reviewed new shift', detail: 'I read the new shift: Forklift Op · Friday 6:00 AM · Bay 4, certified-only.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Matching the pool turned up 11 certified, available workers — a healthy field with no coverage risk. Since there’s plenty of supply I don’t need to widen the net; I’ll offer it to the top 6 ranked by proximity and reliability and let the first claim take it.' },
+    { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   new_user_luis: [
-    { icon: 'edit',  headline: 'Read the new candidate record', detail: 'Type: Candidate, with no tasks yet.' },
-    { icon: 'clock', headline: 'Pulled the onboarding set', detail: '5 standard intake tasks.' },
-    { icon: 'done',  headline: 'Checked what’s on file', detail: 'Nothing pre-fillable.' },
+    { icon: 'clock', headline: 'Reviewed new candidate', detail: 'I read the new Candidate record for Luis M. — no tasks on it yet.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Nothing is pre-fillable on file and this is a standard new-candidate setup, so the straightforward path is to kick off onboarding: send a welcome, assign the 5 standard intake tasks, and follow up to completion.' },
+    { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   missed_clockin_james: [
-    { icon: 'clock', headline: 'Saw the start pass with no clock-in', detail: 'The 5-minute grace window elapsed.' },
-    { icon: 'edit',  headline: 'Pulled his contact + channel', detail: 'Preferred channel is SMS.' },
-    { icon: 'alert', headline: 'Confirmed no release on file', detail: 'No time-off — an unexplained gap.' },
+    { icon: 'clock', headline: 'Reviewed missed clock-in', detail: 'I saw James’s 9:00 AM start pass with no clock-in after the 5-minute grace window; his preferred channel is SMS.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'There’s no time-off or release on file, so this is an unexplained gap rather than a planned absence — but it’s early enough that he may simply be running late. Before treating it as a no-show I’ll text him to check if he’s on the way, update the shift with what I learn, and flag the scheduling inbox if he doesn’t respond.' },
+    { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   thread_cancel_wed: [
-    { icon: 'edit',  headline: 'Read the inbound message', detail: 'An informal cancellation for a Wed shift.' },
-    { icon: 'chart', headline: 'Matched it to a shift', detail: 'Wed 7:00 AM · Pier 9.' },
-    { icon: 'alert', headline: 'Confirmed no formal release', detail: 'It still needs to be recorded.' },
+    { icon: 'clock', headline: 'Reviewed inbound message', detail: 'I read the worker’s “I can’t make tomorrow” reply and matched it to her assigned Wed 7:00 AM shift at Pier 9.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'It’s an informal cancellation with no formal release on file, so the shift still reads as covered when it isn’t. To keep the record honest I’ll log it as a release, acknowledge her reply, and start a replacement search right away since the shift is tomorrow.' },
+    { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   payroll_acme_invoice: [
-    { icon: 'rate',  headline: 'Read the approved bill rate', detail: '$48/hr · 8 hrs.' },
-    { icon: 'clock', headline: 'Found Acme’s open invoice', detail: 'Net-30, draft status.' },
-    { icon: 'done',  headline: 'Confirmed no duplicate line', detail: 'Safe to add.' },
+    { icon: 'clock', headline: 'Reviewed approved shift', detail: 'I read the approved bill rate — $48/hr · 8 hrs — and matched it to Acme’s open, net-30 draft invoice.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'There’s no duplicate line for it yet, so it’s safe to add. Rather than open a new invoice, the clean move is to roll the approved shift onto Acme’s existing open invoice and recalculate the total so billing stays consolidated.' },
+    { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   job_event_staff: [
-    { icon: 'clock', headline: 'Read the job', detail: 'Event Staff · 20 needed · Sat 4:00 PM.' },
-    { icon: 'chart', headline: 'Ran matching on the pool', detail: '63 eligible workers, ranked.' },
-    { icon: 'alert', headline: 'Checked for double-booking', detail: 'Filtered out 9 against Sat shifts.' },
+    { icon: 'clock', headline: 'Reviewed new job', detail: 'I read the job: Event Staff · 20 openings · Saturday 4:00 PM.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Matching the pool ranked 63 eligible workers and filtered out 9 double-booked against Saturday shifts. With 20 slots to fill and good supply, the efficient path is to invite the top matches to claim slots first-come, track responses, and keep a standby list rather than hand-assigning each opening.' },
+    { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   missed_clockout_bianca: [
-    { icon: 'clock', headline: 'Saw the shift end with no clock-out', detail: 'The timesheet is left open.' },
-    { icon: 'edit',  headline: 'Pulled her end + last ping', detail: 'She left the site ~6:05 PM.' },
-    { icon: 'alert', headline: 'Held the timesheet from payroll', detail: 'It needs a real end time.' },
+    { icon: 'clock', headline: 'Reviewed open timesheet', detail: 'I saw Bianca’s shift end with no clock-out, leaving her timesheet open; her last geofence ping puts her off-site around 6:05 PM.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'An open punch can’t go through payroll as-is, so I’ve held it from the run. The ping gives a likely end time, but I’d rather confirm it with her than guess — I’ll text Bianca, correct the timesheet with her real end time, and flag payroll so the run isn’t delayed.' },
+    { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   schedule_published: [
-    { icon: 'chart', headline: 'Scanned next week’s shifts', detail: '84 shifts across 31 workers.' },
-    { icon: 'alert', headline: 'Checked confirmation status', detail: '22 are still unconfirmed.' },
-    { icon: 'edit',  headline: 'Grouped unconfirmed by day', detail: 'Monday and Tuesday are heaviest.' },
+    { icon: 'clock', headline: 'Reviewed published schedule', detail: 'I scanned next week’s schedule: 84 shifts across 31 workers.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: '22 shifts are still unconfirmed, heaviest on Monday and Tuesday — that’s where the start-of-week risk sits. Confirming now, before the weekend, gives workers time to flag conflicts, so I’ll send confirmations to everyone, chase the unconfirmed, and prepare a Monday-readiness summary.' },
+    { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   shift_release_jenny: [
-    { icon: 'clock', headline: 'Read the released shift', detail: 'Caregiver · Lakeside · Sat 8:00 AM.' },
-    { icon: 'alert', headline: 'Confirmed it’s 12+ hours out', detail: 'Standard fill path.' },
-    { icon: 'chart', headline: 'Ran matching policies', detail: '5 qualified, available caregivers.' },
+    { icon: 'clock', headline: 'Reviewed released shift', detail: 'I read the released shift: Caregiver · Lakeside · Saturday 8:00 AM.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'It’s more than 12 hours out, so this is a standard fill with no coverage risk. Matching the pool surfaced 5 qualified caregivers, so I’ll reach out to the best matches in ranked order and assign the first qualified yes.' },
+    { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   birthday_tomas: [
-    { icon: 'clock', headline: 'Matched today to a birthday', detail: 'It’s Tomas G.' },
-    { icon: 'edit',  headline: 'Pulled his preferred channel', detail: 'In-app chat.' },
-    { icon: 'done',  headline: 'Confirmed he’s active', detail: 'A send is appropriate.' },
+    { icon: 'clock', headline: 'Reviewed birthday', detail: 'I matched today to Tomas Greco’s birthday — he’s an active employee on in-app chat.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'He’s active and reachable on in-app chat, so a quick, warm send is appropriate. I’ll send a happy-birthday note from the team.' },
+    { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   cred_expired_nadia: [
-    { icon: 'alert', headline: 'A blocking policy flagged the lapse', detail: 'CPR is required for her role.' },
-    { icon: 'chart', headline: 'Found her CPR-gated shifts', detail: '3 in the next week.' },
-    { icon: 'done',  headline: 'Checked replacement availability', detail: 'Covered for all 3.' },
+    { icon: 'clock', headline: 'Reviewed credential lapse', detail: 'A blocking policy flagged that Nadia’s CPR certification lapsed overnight; CPR is required for her role.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Three CPR-gated shifts in the next week are now at risk, but replacements are available for all three. The right move is to pull her from the non-compliant shifts, start a renewal, and line up backfills so coverage holds while she recertifies.' },
+    { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
-  // ── "No action needed" events — the verification Ultron ran to conclude there
-  // was nothing to do (so their trail reads as deliberate, not empty). ──────────
+  // ── "No action needed" events — the thinking Ultron ran to conclude there was
+  // nothing to do (so their trail reads as deliberate, not empty). ──────────────
   clockin_devon: [
-    { icon: 'clock', headline: 'Read the clock-in event', detail: 'Inside the Eastgate geofence.' },
-    { icon: 'alert', headline: 'Checked required fields', detail: 'All present — nothing missing.' },
-    { icon: 'done',  headline: 'Confirmed no action needed', detail: 'The system is working as intended.' },
+    { icon: 'clock', headline: 'Reviewed clock-in', detail: 'Devon clocked in at Eastgate Warehouse; I checked it against the geofence and required fields.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'It’s a clean clock-in inside the geofence with every required field present, so there’s nothing to fix — the system is working as intended and I’ll just log it.' },
   ],
   phone_aisha: [
-    { icon: 'edit',  headline: 'Read the profile edit', detail: 'A phone number on an editable field.' },
-    { icon: 'alert', headline: 'Checked downstream dependencies', detail: 'No policy or workflow relies on it.' },
-    { icon: 'done',  headline: 'Confirmed nothing to do', detail: 'A routine edit.' },
+    { icon: 'clock', headline: 'Reviewed profile update', detail: 'Aisha updated her phone number — a routine edit on an editable field.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'No policy or workflow depends on this field, so there’s no downstream impact and nothing to do beyond logging it.' },
   ],
   fill_confirmed_maria: [
-    { icon: 'done',  headline: 'Saw my earlier fill close out', detail: 'A replacement was confirmed for Maria’s shift.' },
-    { icon: 'edit',  headline: 'Verified coverage', detail: 'The shift is covered and the scheduler was notified.' },
-    { icon: 'done',  headline: 'Confirmed no action needed', detail: 'I’ll just log it.' },
+    { icon: 'clock', headline: 'Reviewed autonomous fill', detail: 'My earlier fill for Maria’s shift closed out — Sarah Quinn confirmed for the open RN shift.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Coverage is secured and the scheduler was already notified, so this is my own work completing successfully — there’s nothing more to do but log it.' },
   ],
   weekly_fill_report: [
-    { icon: 'chart', headline: 'Saw the report run', detail: 'On its configured schedule.' },
-    { icon: 'done',  headline: 'Checked placement', detail: 'It’s already on the Home dashboard.' },
+    { icon: 'clock', headline: 'Reviewed scheduled report', detail: 'The weekly fill-rate report ran on its configured schedule.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'It’s already posted to the Home dashboard and reflects current numbers, so there’s nothing to intervene on — I’ll just confirm placement and log it.' },
   ],
   invoice_paid_4821: [
-    { icon: 'rate',  headline: 'Read the paid status', detail: 'Recorded outside Teambridge.' },
-    { icon: 'done',  headline: 'Confirmed the record is accurate', detail: 'It reflects reality — nothing to act on.' },
+    { icon: 'clock', headline: 'Reviewed paid invoice', detail: 'A client marked invoice #4821 as paid, recorded outside Teambridge.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'The status already reflects reality and there’s no duplicate or follow-up needed, so there’s nothing to act on — I’ll log it.' },
   ],
 };
 
@@ -840,6 +837,9 @@ export const THREAD_RECORDS: Record<string, RecordRef | RecordRef[]> = {
  *  surface so a bundled "do A and B" prompt reads as its constituent tasks. */
 export interface PlanTask {
   label: string;
+  /** A secondary line under the label — what the step actually does, in a
+   *  sentence (shown muted beneath the task title). */
+  detail?: string;
   /** When set, the task surfaces the thread's candidate records as a stacked
    *  avatar group (the people it would contact) instead of plain text. */
   showsCandidates?: boolean;
@@ -853,9 +853,9 @@ export interface PlanTask {
  *  Sourced from each event's "What I'd do" steps. */
 export const THREAD_TASKS: Record<string, PlanTask[]> = {
   shift_drop_maria: [
-    { label: 'Message the top replacements', showsCandidates: true },
-    { label: 'Assign the first qualified yes' },
-    { label: 'Mark filled and notify the scheduler', person: { name: 'Dana Cole', avatarSeed: 'scheduler_dana' } },
+    { label: 'Message the best-matched replacements', detail: 'Reach out to the top qualified RNs (max 20 — based on 24 active scheduling policies) with the shift details.', showsCandidates: true },
+    { label: 'Confirm and assign shift', detail: 'Communicate the need with staff, and assign them to the shift if they agree.' },
+    { label: 'Notify the location manager', detail: 'Notify the location manager of the last-minute scheduling change.', person: { name: 'Dana Cole', avatarSeed: 'scheduler_dana' } },
   ],
   timeoff_sofia: [
     { label: 'Confirm the PTO balance covers it' },
@@ -925,6 +925,31 @@ export const THREAD_TASKS: Record<string, PlanTask[]> = {
   ],
 };
 
+/** Ultron's full read on a case, communicated as a short message after the
+ *  (collapsed) thinking group and above the decision dock — returned as separate
+ *  paragraphs so it reads in digestible beats: the reasoning from the start (how
+ *  it sized up the situation and the risk), then the concrete plan it's asking to
+ *  approve. The reasoning is the case's own analysis narrative; the plan mirrors
+ *  the task breakdown (or the recommendation). */
+export function planSummary(thread: ThreadItem): string[] {
+  // Each analysis step's detail line becomes its own paragraph, in order (the
+  // closing "Plan created and shared" step carries no detail, so it drops).
+  const paragraphs = analyzingSteps(thread.id).map(s => s.detail).filter(Boolean);
+
+  const tasks = THREAD_TASKS[thread.id];
+  if (tasks?.length) {
+    const steps = tasks.map(t => t.label.charAt(0).toLowerCase() + t.label.slice(1));
+    const list = steps.length > 1
+      ? `${steps.slice(0, -1).join(', ')}, and ${steps[steps.length - 1]}`
+      : steps[0];
+    paragraphs.push(`Here’s my plan — I’ll ${list}. Approve below and I’ll get started.`);
+  } else {
+    paragraphs.push(`Here’s my plan — ${thread.recommendation} Approve below and I’ll get started.`);
+  }
+
+  return paragraphs;
+}
+
 /** Past-activity breakdown shown (expandable) on a resolved card. A block is a
  *  paragraph, and/or a labeled bullet list, a labeled check list, and/or a list
  *  of referenced records (people/shifts) rendered as record cards. */
@@ -943,17 +968,22 @@ export interface ActivityMilestone {
 }
 
 const THREAD_ACTIVITY: Record<string, ActivityMilestone[]> = {
+  // New-group cases read as a tight thinking sequence: the detection facts are
+  // folded into the analyzing steps (see ANALYZING_ACTIVITIES), so the event
+  // trail carries no separate milestones — the reasoning IS the whole trail.
+  shift_drop_maria: [],
+  timeoff_sofia: [],
+  document_kenji: [],
+  application_priya: [],
+  new_shift_forklift: [],
+  new_user_luis: [],
+  missed_clockin_james: [],
+  thread_cancel_wed: [],
+  payroll_acme_invoice: [],
+  job_event_staff: [],
+  missed_clockout_bianca: [],
+  schedule_published: [],
   shift_release_jenny: [
-    {
-      icon: 'clock',
-      headline: 'Saturday caregiver shift released',
-      blocks: [{ text: 'Jenny Park released her 8:00 AM caregiver shift at Lakeside.' }],
-    },
-    {
-      icon: 'alert',
-      headline: 'Standard fill path',
-      blocks: [{ bullets: ['More than 12 hours out', '5 qualified caregivers available', 'No coverage risk'] }],
-    },
     {
       icon: 'send',
       headline: 'Messaged the best matches',
@@ -974,11 +1004,6 @@ const THREAD_ACTIVITY: Record<string, ActivityMilestone[]> = {
   ],
   fill_confirmed_maria: [
     {
-      icon: 'done',
-      headline: 'Replacement confirmed for Maria’s shift',
-      blocks: [{ text: 'Ultron’s earlier fill closed out — Sarah Quinn confirmed for the open RN shift.' }],
-    },
-    {
       icon: 'edit',
       headline: 'Coverage secured',
       blocks: [{ checks: ['Shift covered', 'Scheduler notified', 'No further action needed'] }],
@@ -990,16 +1015,6 @@ const THREAD_ACTIVITY: Record<string, ActivityMilestone[]> = {
     },
   ],
   cred_expired_nadia: [
-    {
-      icon: 'clock',
-      headline: 'CPR cert expired overnight',
-      blocks: [{ text: 'A blocking policy flagged that Nadia’s CPR certification lapsed.' }],
-    },
-    {
-      icon: 'alert',
-      headline: '3 upcoming shifts at risk',
-      blocks: [{ bullets: ['CPR is required for her role', '3 CPR-gated shifts in the next week', 'Replacements available for all 3'] }],
-    },
     {
       icon: 'send',
       headline: 'Renewal started + backfills lined up',
@@ -1016,22 +1031,12 @@ const THREAD_ACTIVITY: Record<string, ActivityMilestone[]> = {
   ],
   birthday_tomas: [
     {
-      icon: 'clock',
-      headline: 'Birthday matched to today',
-      blocks: [{ text: 'Today is Tomas Greco’s birthday; he’s an active employee on in-app chat.' }],
-    },
-    {
       icon: 'done',
       headline: 'Birthday note sent',
       blocks: [{ text: 'A warm happy-birthday message went out to Tomas from the team.' }],
     },
   ],
   weekly_fill_report: [
-    {
-      icon: 'chart',
-      headline: 'Weekly fill-rate report generated',
-      blocks: [{ text: 'The scheduled report ran exactly as configured.' }],
-    },
     {
       icon: 'done',
       headline: 'Posted to the Home dashboard',
@@ -1040,11 +1045,6 @@ const THREAD_ACTIVITY: Record<string, ActivityMilestone[]> = {
   ],
   clockin_devon: [
     {
-      icon: 'clock',
-      headline: 'Clock-in at Eastgate Warehouse',
-      blocks: [{ text: 'Devon clocked in cleanly inside the geofence.' }],
-    },
-    {
       icon: 'done',
       headline: 'No action needed',
       blocks: [{ checks: ['Inside the geofence', 'All required fields filled', 'System working as intended'] }],
@@ -1052,22 +1052,12 @@ const THREAD_ACTIVITY: Record<string, ActivityMilestone[]> = {
   ],
   phone_aisha: [
     {
-      icon: 'edit',
-      headline: 'Phone number updated',
-      blocks: [{ text: 'A routine profile edit on an editable field.' }],
-    },
-    {
       icon: 'done',
       headline: 'No action needed',
       blocks: [{ text: 'No downstream policy or workflow depends on it — logged.' }],
     },
   ],
   invoice_paid_4821: [
-    {
-      icon: 'rate',
-      headline: 'Invoice #4821 marked paid',
-      blocks: [{ text: 'Payment was recorded outside Teambridge and the status is already updated.' }],
-    },
     {
       icon: 'done',
       headline: 'No action needed',
@@ -1292,3 +1282,22 @@ export const RESOLVE_OUTCOMES: Record<string, string> = {
   birthday_tomas: 'Birthday note sent to Tomas from the team.',
   cred_expired_nadia: 'Renewal started and backfills lined up for the 3 affected shifts.',
 };
+
+// ── Ultron chat replies ───────────────────────────────────────────────────────
+// DEMO ONLY — canned responses Ultron gives to a free-text message typed into the
+// composer. There's no backend or real generation: the reply cycles through this
+// pool (indexed by how many times Ultron has answered in the thread) so a short
+// back-and-forth reads naturally instead of repeating the same line.
+const ULTRON_REPLIES = [
+  'Got it — I’ll factor that in and update my recommendation.',
+  'Understood. Let me re-check the coverage with that in mind and flag anything that shifts.',
+  'Thanks for the context — I’ll adjust the plan and keep you posted as it runs.',
+  'Noted. I’ll hold that step for now and keep monitoring in the meantime.',
+];
+
+/** Pick Ultron's mocked reply to an operator message. `index` is the count of
+ *  replies Ultron has already given in this thread, so consecutive answers walk
+ *  through the pool rather than echoing one another. */
+export function mockUltronReply(_text: string, index: number): string {
+  return ULTRON_REPLIES[index % ULTRON_REPLIES.length];
+}

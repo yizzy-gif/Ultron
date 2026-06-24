@@ -20,6 +20,14 @@ export type ThreadStatus =
 /** Operational urgency. Maps to the leading severity dot + a severity StatusTag. */
 export type ThreadSeverity = 'high' | 'medium' | 'low' | 'none';
 
+/** A free-text turn in the operator ⇄ Ultron conversation typed into the composer
+ *  at the foot of the event page. The operator's message is echoed back as a sent
+ *  bubble; Ultron's reply is mocked (DEMO ONLY — no backend, no real generation). */
+export interface ChatMessage {
+  role: 'operator' | 'ultron';
+  text: string;
+}
+
 /** One step in the case timeline (detected → assessment → recommendation → …). */
 export interface ThreadTimelineStep {
   /** Lifecycle key, e.g. 'detected', 'assessment', 'recommendation', 'approval'. */

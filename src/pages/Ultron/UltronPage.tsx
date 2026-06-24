@@ -11,7 +11,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import styled, { keyframes, css } from 'styled-components';
-import type { ThreadItem, ThreadStatus } from './types';
+import type { ChatMessage, ThreadItem, ThreadStatus } from './types';
 import { SEVERITY_RANK, isPurpleRow } from './ultronShared';
 import { UltronCard, UltronActionCard, UltronActivityCards, UltronAnalyzingTrigger } from './UltronCard';
 import { UltronComposer } from './UltronComposer';
@@ -52,6 +52,9 @@ interface UltronPageProps {
   /** Outbound messages per thread — the operator's approved replies, shown as
    *  sent bubbles in the message thread under the activities. */
   outboundByThread: Record<string, string[]>;
+  /** Free-text conversation per thread — the operator's typed messages and
+   *  Ultron's mocked replies, shown as a chat below the activity trail. */
+  chatByThread: Record<string, ChatMessage[]>;
   /** Thread the sidebar has selected — expanded + scrolled into view. */
   selectedId: string | null;
   /** DEMO ONLY — advance an analyzing case to Needs approval. */
@@ -72,7 +75,7 @@ interface UltronPageProps {
 const CLOSE_MS = 280;
 
 export function UltronPage({
-  threads, stageById, section, analyzedIds, outboundByThread, selectedId, onDecide, onAction, onRefinement, onSaveWorkflow, onSend, onClose, onDetectRisk,
+  threads, stageById, section, analyzedIds, outboundByThread, chatByThread, selectedId, onDecide, onAction, onRefinement, onSaveWorkflow, onSend, onClose, onDetectRisk,
 }: UltronPageProps) {
   // While true, the paged case detail plays its exit animation; once it finishes
   // we hand off to the parent, which swaps the page to the Live landing.
@@ -245,6 +248,10 @@ export function UltronPage({
             // stays in the Working group. Show its completed trail (like a working
             // case) with the decision docked at the foot.
             const monitoring = thread.status === 'monitoring';
+            // Workflow-ready cases are terminal too — they show the same completed
+            // think → plan → execute trail as a resolved case, with the
+            // Save-as-workflow surface docked at the foot.
+            const workflowReady = thread.status === 'workflow_available';
             return (
               <>
                 {/* The event card pins to the top of the scroll area; the
@@ -259,7 +266,7 @@ export function UltronPage({
                     expanded={executing ? false : eventExpanded}
                     detachActionable={dockEligible}
                     detachAnalyzing={analyzing}
-                    detachTrail={resolved}
+                    detachTrail={resolved || workflowReady}
                     onToggle={() => {}}
                     onClose={handleClose}
                     onDecide={onDecide}
@@ -273,11 +280,12 @@ export function UltronPage({
                     with the working mark); the analysis steps are part of the same
                     group, so there's no separate analyzing card. Keyed by case id so
                     it remounts only when the case changes, not when it advances. */}
-                {(analyzing || awaitingDecision || executing || resolved || monitoring) && (
+                {(analyzing || awaitingDecision || executing || resolved || monitoring || workflowReady) && (
                   <UltronActivityCards
                     key={thread.id}
                     thread={thread}
                     outbound={outboundByThread[thread.id] ?? []}
+                    chat={chatByThread[thread.id] ?? []}
                     analyzing={analyzing}
                   />
                 )}
@@ -321,7 +329,7 @@ export function UltronPage({
           <ActionDockInner>
             {dockThread && (
               <UltronActionCard
-                key={dockThread.id}
+                key={`action-${dockThread.id}`}
                 thread={dockThread}
                 stage={stageById[dockThread.id] ?? 0}
                 onAction={onAction}
@@ -337,7 +345,7 @@ export function UltronPage({
               <UltronAnalyzingTrigger thread={pagedThread} onDecide={onDecide} />
             )}
             <UltronComposer
-              key={pagedCurrentId}
+              key={`composer-${pagedCurrentId}`}
               onSend={text => onSend(pagedCurrentId, text)}
             />
           </ActionDockInner>

@@ -5,9 +5,9 @@
    ───────────────────────────────────────────────────────────────────────────── */
 
 import { useMemo, useReducer, useState } from 'react';
-import { ultronThreads, RESOLVE_OUTCOMES, THREAD_FOLLOWUPS, WORKING_ACTIVITIES, spawnThreadFromEvent } from './fixtures';
+import { ultronThreads, RESOLVE_OUTCOMES, THREAD_FOLLOWUPS, WORKING_ACTIVITIES, spawnThreadFromEvent, mockUltronReply } from './fixtures';
 import type { IncomingEvent } from './fixtures';
-import type { ThreadItem, ThreadStatus } from './types';
+import type { ChatMessage, ThreadItem, ThreadStatus } from './types';
 import { SEVERITY_RANK } from './ultronShared';
 
 /** A case Ultron opened itself from a detected risk signal (vs. an authored
@@ -22,6 +22,9 @@ export const ACTIVITY_STEP_MS = 2400;
 // Extra beat on the final step before the thread flips to Resolved, so the last
 // milestone (e.g. "Coverage confirmed") is readable rather than flashing past.
 const END_PAD_MS = 1000;
+// Beat between the operator's chat message landing and Ultron's mocked reply, so
+// the reply reads as a considered response rather than an instant echo.
+const REPLY_DELAY_MS = 1100;
 
 /** How long a thread stays "in progress" (Live stream): the full activity
  *  sequence for that thread, plus a closing beat. Scales with the sequence
@@ -105,6 +108,9 @@ export interface UltronStore {
   /** Outbound messages the operator has sent per thread (the action labels they
    *  approved from the prompt card), shown as sent bubbles in the message thread. */
   outboundByThread: Record<string, string[]>;
+  /** The free-text conversation per thread — the operator's typed messages and
+   *  Ultron's (mocked) replies, shown as a chat below the activity trail. */
+  chatByThread: Record<string, ChatMessage[]>;
   setSelectedId: (id: string) => void;
   /** Open a fresh analyzing case from a risk signal detected on the Live
    *  landing. Idempotent per signal; the user stays on Live while it lands. */
@@ -113,8 +119,9 @@ export interface UltronStore {
   decide: (threadId: string) => void;
   commit: (threadId: string, label: string) => void;
   /** Send a free-text chat message to Ultron — appends it as a sent bubble in the
-   *  thread (the composer at the foot of the event page) without advancing the
-   *  case's status the way an approved action (commit) does. */
+   *  thread (the composer at the foot of the event page) and lands a mocked Ultron
+   *  reply a beat later, without advancing the case's status the way an approved
+   *  action (commit) does. */
   sendMessage: (threadId: string, text: string) => void;
   refine: (label: string) => void;
   saveWorkflow: (thread: ThreadItem) => void;
@@ -175,6 +182,10 @@ export function useUltronStore(): UltronStore {
   // prompt card is appended here and rendered as a sent bubble under the trail.
   const [outboundByThread, setOutboundByThread] = useState<Record<string, string[]>>({});
 
+  // Free-text conversation per thread — the operator's typed messages paired with
+  // Ultron's mocked replies, rendered as a chat below the activity trail.
+  const [chatByThread, setChatByThread] = useState<Record<string, ChatMessage[]>>({});
+
   // A risk surfaced on the Live landing → Ultron opens a case. Lands a fresh
   // analyzing case at the top of New (orbit/working mark + typing title in the
   // sidebar). The user stays on the Live landing; the New badge ticks up.
@@ -228,22 +239,36 @@ export function useUltronStore(): UltronStore {
     }, delay);
   };
   // A free-text reply typed into the composer at the foot of the event page.
-  // Records it as an outbound message so it lands as a sent bubble in the thread,
-  // keeping the view anchored on the case — but, unlike commit, it doesn't move
-  // the case through its lifecycle (it's conversation, not an approved action).
+  // The operator's message lands immediately as a sent bubble; Ultron then mocks
+  // a reply a beat later (the response to their message). Unlike commit, this
+  // keeps the view anchored on the case without moving it through its lifecycle —
+  // it's conversation, not an approved action.
   const sendMessage = (threadId: string, text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
     setSelectedId(threadId);
-    setOutboundByThread(prev => ({
+    setChatByThread(prev => ({
       ...prev,
-      [threadId]: [...(prev[threadId] ?? []), trimmed],
+      [threadId]: [...(prev[threadId] ?? []), { role: 'operator', text: trimmed }],
     }));
+    // Ultron answers shortly after. The reply variant walks the canned pool by
+    // how many times Ultron has already replied in this thread (read fresh from
+    // the latest state so rapid messages don't collide on a stale count).
+    window.setTimeout(() => {
+      setChatByThread(prev => {
+        const existing = prev[threadId] ?? [];
+        const replyCount = existing.filter(m => m.role === 'ultron').length;
+        return {
+          ...prev,
+          [threadId]: [...existing, { role: 'ultron', text: mockUltronReply(trimmed, replyCount) }],
+        };
+      });
+    }, REPLY_DELAY_MS);
   };
 
   // Refinement and save-workflow are demo stubs with no surface yet — no-ops.
   const refine = (_label: string) => {};
   const saveWorkflow = (_thread: ThreadItem) => {};
 
-  return { threads, groups, selectedId, selectedThread, selectedStage, stageById, viewedIds, analyzedIds, outboundByThread, setSelectedId, detectRisk, decide, commit, sendMessage, refine, saveWorkflow };
+  return { threads, groups, selectedId, selectedThread, selectedStage, stageById, viewedIds, analyzedIds, outboundByThread, chatByThread, setSelectedId, detectRisk, decide, commit, sendMessage, refine, saveWorkflow };
 }

@@ -15,7 +15,7 @@ import type { ChatMessage, ThreadItem } from './types';
 import {
   THREAD_SUBJECTS, threadAvatarUrl, THREAD_PROMPTS, threadDisplayTitle, threadMeta,
   THREAD_FOLLOWUPS, THREAD_RECORDS, activityForThread, analyzingSteps,
-  WORKING_ACTIVITIES, THREAD_TASKS, planSummary,
+  WORKING_ACTIVITIES, THREAD_TASKS, caseSummary,
 } from './fixtures';
 import type { ActivityMilestone, WorkingMilestone, PlanTask, RecordRef, AnalyzingStep } from './fixtures';
 import { RecordCard } from './RecordCard';
@@ -703,15 +703,17 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], analyzin
   // While executing, the working group settles its OWN mark in place (it glides
   // down + morphs lines → magnetic), so the separate foot mark stays out of the
   // way — otherwise the in-trail mark would vanish and this one would pop in below.
-  // Once Ultron has finished reasoning on a case that still needs a decision, it
-  // communicates its plan as a short response below the (now-collapsed) thinking
-  // group — so the operator reads the plan in prose, then approves it in the dock.
+  // Once Ultron has finished working a case — it's awaiting a decision, or it has
+  // resolved / is workflow-ready — it collapses the thinking group and communicates
+  // the result as a short message below it: the plan (awaiting) or the outcome
+  // (done). This makes every event page read the same way.
   const awaitingDecision = thread.status === 'needs_approval' || thread.status === 'recommended';
-  const showPlanMessage = awaitingDecision && outbound.length === 0 && atRest && revealed.length > 0;
+  const concluded = awaitingDecision || resolved || thread.status === 'workflow_available';
+  const showSummaryMessage = concluded && outbound.length === 0 && atRest && revealed.length > 0;
 
   // The resting "monitoring" mark holds at the foot while Ultron waits — but when
-  // it has a plan message to show, that message stands in as its presence instead.
-  const showRestingMark = !resolved && !analyzing && !executing && atRest && revealed.length > 0 && !showPlanMessage;
+  // it has a summary message to show, that message stands in as its presence instead.
+  const showRestingMark = !resolved && !analyzing && !executing && atRest && revealed.length > 0 && !showSummaryMessage;
 
   // Keep the resting magnetic mark mounted briefly after activity resumes so it
   // fades out in place (cross-fading into the gliding lines mark) instead of
@@ -761,13 +763,13 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], analyzin
         // freshest reasoning (or, for a resolved case, the outcome), with no
         // prompt response following it, so it reads open by default.
         const isLastActs = i === lastActsIdx;
-        // On a case still awaiting a decision, the thinking group folds to its
-        // "Thought for X" summary once Ultron has finished reasoning (not the live
-        // analyzing run, not actively streaming): the plan is communicated in the
-        // message below, so the steps tuck away (still reopenable). Resolved/working
-        // trails keep their group expanded so the executed work stays visible.
+        // On a concluded case (awaiting a decision, or resolved / workflow-ready),
+        // the thinking group folds to its "Thought for X" summary once Ultron has
+        // finished reasoning (not the live analyzing run, not actively streaming):
+        // the plan or outcome is communicated in the message below, so the steps
+        // tuck away (still reopenable). The live working trail stays expanded.
         const isReasoning = !seenMessage && !isWorkingGroup;
-        const reasoningDone = awaitingDecision && isReasoning && !isAnalyzingGroup && !isStreamingGroup;
+        const reasoningDone = concluded && isReasoning && !isAnalyzingGroup && !isStreamingGroup;
         const collapsed = reasoningDone || (!isLastActs && (isLegacy || (seenMessage && !isWorkingGroup)));
         return (
           <ActivityTrailCards
@@ -780,9 +782,9 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], analyzin
           />
         );
       })}
-      {/* Ultron's plan, communicated as a response right after the thinking group
-          and above the decision dock. */}
-      {showPlanMessage && <UltronPlanMessage paragraphs={planSummary(thread)} />}
+      {/* Ultron's read on the case — the plan (awaiting) or the outcome (done) —
+          communicated as a response right after the (collapsed) thinking group. */}
+      {showSummaryMessage && <UltronPlanMessage paragraphs={caseSummary(thread)} />}
       {renderRestingMark && (
         <RestingMark role="img" aria-label="Ultron monitoring" $leaving={!showRestingMark}>
           <AgentMark mark="magnetic" size={36} tone="auto" state="active" motionSpeed={1.2} coreHalo={false} aria-hidden="true" />

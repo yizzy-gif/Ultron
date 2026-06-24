@@ -926,25 +926,34 @@ export const THREAD_TASKS: Record<string, PlanTask[]> = {
 };
 
 /** Ultron's full read on a case, communicated as a short message after the
- *  (collapsed) thinking group and above the decision dock — returned as separate
- *  paragraphs so it reads in digestible beats: the reasoning from the start (how
- *  it sized up the situation and the risk), then the concrete plan it's asking to
- *  approve. The reasoning is the case's own analysis narrative; the plan mirrors
- *  the task breakdown (or the recommendation). */
-export function planSummary(thread: ThreadItem): string[] {
+ *  (collapsed) thinking group — returned as separate paragraphs so it reads in
+ *  digestible beats: the reasoning from the start (how it sized up the situation
+ *  and the risk), then a closing beat. For a case awaiting a decision that closing
+ *  beat is the concrete plan it's asking to approve; for a resolved / workflow-ready
+ *  case it's the outcome. The reasoning is the case's own analysis narrative; the
+ *  plan mirrors the task breakdown (or the recommendation). */
+export function caseSummary(thread: ThreadItem): string[] {
   // Each analysis step's detail line becomes its own paragraph, in order (the
   // closing "Plan created and shared" step carries no detail, so it drops).
   const paragraphs = analyzingSteps(thread.id).map(s => s.detail).filter(Boolean);
 
-  const tasks = THREAD_TASKS[thread.id];
-  if (tasks?.length) {
-    const steps = tasks.map(t => t.label.charAt(0).toLowerCase() + t.label.slice(1));
-    const list = steps.length > 1
-      ? `${steps.slice(0, -1).join(', ')}, and ${steps[steps.length - 1]}`
-      : steps[0];
-    paragraphs.push(`Here’s my plan — I’ll ${list}. Approve below and I’ll get started.`);
+  const awaiting = thread.status === 'needs_approval' || thread.status === 'recommended';
+  if (awaiting) {
+    const tasks = THREAD_TASKS[thread.id];
+    if (tasks?.length) {
+      const steps = tasks.map(t => t.label.charAt(0).toLowerCase() + t.label.slice(1));
+      const list = steps.length > 1
+        ? `${steps.slice(0, -1).join(', ')}, and ${steps[steps.length - 1]}`
+        : steps[0];
+      paragraphs.push(`Here’s my plan — I’ll ${list}. Approve below and I’ll get started.`);
+    } else {
+      paragraphs.push(`Here’s my plan — ${thread.recommendation} Approve below and I’ll get started.`);
+    }
   } else {
-    paragraphs.push(`Here’s my plan — ${thread.recommendation} Approve below and I’ll get started.`);
+    // Resolved / workflow-ready: close on the outcome — unless the case needed no
+    // action (its reasoning already concludes that, so an outcome line just repeats it).
+    const noAction = thread.recommendation.trim().toLowerCase().startsWith('no action');
+    if (!noAction && thread.outcome) paragraphs.push(thread.outcome);
   }
 
   return paragraphs;

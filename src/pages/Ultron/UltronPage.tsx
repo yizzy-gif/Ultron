@@ -12,7 +12,7 @@
 import { useEffect, useRef, useState } from 'react';
 import styled, { keyframes, css } from 'styled-components';
 import type { ChatMessage, ThreadItem, ThreadStatus } from './types';
-import { SEVERITY_RANK, isPurpleRow } from './ultronShared';
+import { SEVERITY_RANK, isPurpleRow, composerPlaceholder } from './ultronShared';
 import { UltronCard, UltronActionCard, UltronActivityCards, UltronAnalyzingTrigger } from './UltronCard';
 import { UltronComposer } from './UltronComposer';
 import { LiveLanding } from './LiveLanding';
@@ -354,6 +354,7 @@ export function UltronPage({
               onSend={text => onSend(pagedCurrentId, text)}
               working={replyingIds.includes(pagedCurrentId)}
               onStop={() => onStop(pagedCurrentId)}
+              placeholder={composerPlaceholder(pagedThread.status, replyingIds.includes(pagedCurrentId))}
             />
           </ActionDockInner>
         </ActionDock>
@@ -485,6 +486,13 @@ const StickyEvent = styled.div`
   top: 0;
   z-index: 5;
   background: var(--color-bg-primary);
+
+  /* The pinned header reads as a neutral surface in every tone/state — the
+     colored status fill belongs to the scrolling list cards, not the focused
+     event header, so flatten any tonal background to the page surface here. */
+  & > div[data-tone] {
+    background-color: var(--color-bg-primary);
+  }
 
   /* Soft gradient just below the pinned card so content scrolling up dissolves
      into the page background instead of colliding with the card's bottom edge.

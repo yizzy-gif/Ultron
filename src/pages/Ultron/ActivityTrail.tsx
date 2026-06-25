@@ -44,12 +44,19 @@ export function ActivityTrail({ milestones }: { milestones: ActivityMilestone[] 
  *  below the last step and morphs it into the resting magnetic mark once the work
  *  is done; `collapsed` starts the session shut (used for reasoning the operator
  *  has already acted past — the active session streams open). */
-export function ActivityTrailCards({ milestones, typingIndex, collapsed, workingIndex, settled }: {
+export function ActivityTrailCards({ milestones, typingIndex, collapsed, workingIndex, settled, hideActions, running }: {
   milestones: ActivityMilestone[];
   typingIndex?: number;
   collapsed?: boolean;
   workingIndex?: number;
   settled?: boolean;
+  /** Suppress the group's own feedback row — used when the group sits inside an
+   *  <UltronResponse> set, which lifts the feedback below the reply text instead. */
+  hideActions?: boolean;
+  /** Whether Ultron is actively running this group right now — drives the header's
+   *  live status (Thinking → Working → Multi-tasking) instead of the settled
+   *  "Thought for X" recap. */
+  running?: boolean;
 }) {
   return (
     <ActivitySession
@@ -57,16 +64,20 @@ export function ActivityTrailCards({ milestones, typingIndex, collapsed, working
       typingIndex={typingIndex}
       workingIndex={workingIndex}
       settled={settled}
+      hideActions={hideActions}
+      running={running}
       defaultCollapsed={collapsed}
     />
   );
 }
 
-function ActivitySession({ milestones, typingIndex, workingIndex, settled, defaultCollapsed }: {
+function ActivitySession({ milestones, typingIndex, workingIndex, settled, hideActions, running, defaultCollapsed }: {
   milestones: ActivityMilestone[];
   typingIndex?: number;
   workingIndex?: number;
   settled?: boolean;
+  hideActions?: boolean;
+  running?: boolean;
   defaultCollapsed?: boolean;
 }) {
   const [open, setOpen] = useState(!defaultCollapsed);
@@ -160,11 +171,14 @@ function ActivitySession({ milestones, typingIndex, workingIndex, settled, defau
   const thinkSecs = count * 6 + (milestones.reduce((s, m) => s + m.headline.length, 0) % 18);
   const thought = thinkSecs < 60 ? `${thinkSecs} sec` : `${Math.round(thinkSecs / 60)} min`;
   const summary = `Thought for ${thought}`;
+  // While Ultron is actively running this group the summary shows a live status
+  // that advances Thinking → Working → Multi-tasking; once the group is done it
+  // settles to the completed "Thought for X" recap.
 
   return (
     <SessionShell>
       <SessionHeader type="button" aria-expanded={open} onClick={() => setOpen(o => !o)}>
-        <SummaryText>{summary}</SummaryText>
+        <SummaryText $running={running}>{running ? <RunningLabel /> : summary}</SummaryText>
         <Chevron data-open={open || undefined} aria-hidden="true"><ChevronRightIcon size={14} /></Chevron>
       </SessionHeader>
 
@@ -198,7 +212,7 @@ function ActivitySession({ milestones, typingIndex, workingIndex, settled, defau
           {/* Feedback row for the whole group — thumbs up/down, rerun, and a
               timestamp. Shown once the group is no longer actively streaming (no
               live mark riding it), so it reads as actions on a finished response. */}
-          {(workingIndex == null || settled) && (
+          {!hideActions && (workingIndex == null || settled) && (
             <div ref={actionsRef}><SessionActions time={synthClock(milestones)} /></div>
           )}
           {renderMark && (
@@ -228,10 +242,31 @@ function ActivitySession({ milestones, typingIndex, workingIndex, settled, defau
   );
 }
 
+/** The live status shown in a group's header while Ultron is running it: advances
+ *  Thinking → Working → Multi-tasking on a timer and holds on the last beat (with
+ *  an animated ellipsis) until the work catches up, at which point the header
+ *  swaps to the settled "Thought for X" recap. */
+const RUN_PHASES = ['Thinking', 'Working', 'Multi-tasking'];
+
+function RunningLabel() {
+  const [phase, setPhase] = useState(0);
+  useEffect(() => {
+    if (phase >= RUN_PHASES.length - 1) return; // hold on the final beat
+    const t = setTimeout(() => setPhase(p => p + 1), 1600);
+    return () => clearTimeout(t);
+  }, [phase]);
+  return (
+    <>
+      {RUN_PHASES[phase]}
+      <Ellipsis aria-hidden="true"><span>.</span><span>.</span><span>.</span></Ellipsis>
+    </>
+  );
+}
+
 /** A deterministic "h:mm AM/PM" clock label for a group, derived from its
  *  activities so it stays stable across renders (no Date/Math.random in the
  *  demo). Anchored at 9:41 AM and nudged by the combined headline length. */
-function synthClock(milestones: ActivityMilestone[]): string {
+export function synthClock(milestones: ActivityMilestone[]): string {
   const offset = milestones.reduce((s, m) => s + m.headline.length, 0) % 200;
   const total = 9 * 60 + 41 + offset; // base 9:41 AM
   const h24 = Math.floor(total / 60) % 24;
@@ -245,7 +280,7 @@ function synthClock(milestones: ActivityMilestone[]): string {
  *  rating, a rerun, and a trailing timestamp. The thumbs are a single toggle —
  *  picking one clears the other, clicking the active one clears it. Local,
  *  self-contained state (demo feedback only). */
-function SessionActions({ time }: { time: string }) {
+export function SessionActions({ time }: { time: string }) {
   const [vote, setVote] = useState<'up' | 'down' | null>(null);
   const toggle = (v: 'up' | 'down') => setVote(c => (c === v ? null : v));
   return (
@@ -479,19 +514,36 @@ const SessionHeader = styled.button`
   }
 `;
 
+/* The live running label pulses (a soft opacity blink) so it reads as active,
+   matching the typing-headline blink used elsewhere in the trail. */
+const runningBlink = keyframes`
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+`;
+
 /* Sizes to its content (no flex-grow) so the trailing chevron sits right after
-   the label rather than at the far edge of the row. */
-const SummaryText = styled.span`
+   the label rather than at the far edge of the row. While running, the label reads
+   a touch stronger (secondary, not disabled) and blinks so the live status stands
+   out from the settled recap. */
+const SummaryText = styled.span<{ $running?: boolean }>`
   min-width: 0;
   text-align: left;
   font-size: var(--text-sm);
   font-weight: var(--font-weight-medium);
   line-height: var(--line-height-snug);
-  color: var(--color-content-tertiary);
+  color: ${p => (p.$running ? 'var(--color-content-secondary)' : 'var(--color-content-disabled)')};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  animation: ${p => (p.$running ? runningBlink : 'none')} 1.1s ease-in-out infinite;
+
+  @media (prefers-reduced-motion: reduce) { animation: none; }
 `;
+
+/* Trailing ellipsis for the running status. Static dots — the whole label
+   (text + ellipsis) pulses together via SummaryText's running blink, so the dots
+   don't need their own sequential animation. */
+const Ellipsis = styled.span``;
 
 /* Condensed activity stack inside an expanded session. Positioned so the live
    agent mark can be absolutely placed over the icon column; when the mark settles

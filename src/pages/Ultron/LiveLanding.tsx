@@ -515,10 +515,9 @@ const EventCard = styled.div`
   padding: var(--space-3) var(--space-4);
   background: var(--color-bg-secondary);
   border-radius: var(--radius-lg);
+  /* The feed is an ambient, passive read-out — the rows recede at a quiet resting
+     opacity and don't respond to the cursor (no hover brighten, no interaction). */
   opacity: 0.5;
-  transition: opacity var(--duration-fast, 120ms) var(--ease-out, ease);
-
-  &:hover { opacity: 1; }
 
   /* Risk signals carry a faint orange wash once resolved so they read a touch
      hotter than routine ones (the loader + routine states stay neutral). */

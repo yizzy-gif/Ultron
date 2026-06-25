@@ -531,9 +531,16 @@ export function threadDisplayTitle(thread: ThreadItem): string {
   return `${name} ${rest}`;
 }
 
+/** Seed overrides where the default pravatar image doesn't match the person —
+ *  e.g. it returns a woman's photo for a man. Maps the seed to one that resolves
+ *  to a fitting image. */
+const AVATAR_SEED_OVERRIDES: Record<string, string> = {
+  missed_clockin_james: 'james_okoro_2', // resolves to a man
+};
+
 /** Demo placeholder profile photo, stable per case (seeded by thread id). */
 export const threadAvatarUrl = (id: string): string =>
-  `https://i.pravatar.cc/80?u=${id}`;
+  `https://i.pravatar.cc/80?u=${AVATAR_SEED_OVERRIDES[id] ?? id}`;
 
 /** A single "thinking" step Ultron emits while analyzing a fresh event — a
  *  short headline plus a line of sub-context explaining what it found, so the
@@ -553,102 +560,102 @@ export interface AnalyzingStep {
 export const ANALYZING_ACTIVITIES: Record<string, AnalyzingStep[]> = {
   shift_drop_maria: [
     { icon: 'clock', headline: 'Reviewed dropped shift', detail: 'I checked out the dropped shift: RN · Riverside Clinic · 2:00–10:00pm, in the ICU unit.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'The start time is in 4 hours, so this is an urgent fill — it might be too late to find a replacement, and more urgency or incentive may be needed to staff it now. First I’ll evaluate whether there are suitable replacements. I could reach out in ranked order, but as this is urgent let me contact the top 20 best replacements all at once. This has worked in the past, so I won’t suggest a bonus incentive at this time.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'It starts in 4 hours — an urgent fill, where ranked one-by-one outreach is likely too slow. So I’ll message the top 20 matched replacements at once. That’s worked before, so no bonus incentive yet.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   timeoff_sofia: [
     { icon: 'clock', headline: 'Reviewed time-off request', detail: 'I looked at Sofia’s request — Thursday and Friday off, with two assigned shifts falling inside the window.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Her PTO balance covers the request and there’s no blackout rule, so this is approvable. Running coverage on both shifts: Thursday stays fully covered, but Friday only has a single backup and reads thin. Rather than risk an uncovered shift, I’ll recommend approving Thursday outright and holding Friday for your call.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Her PTO covers it and there’s no blackout rule, so it’s approvable. But coverage splits: Thursday stays fully covered, Friday has just one backup and reads thin. So I’ll approve Thursday outright and hold Friday for your call.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   document_kenji: [
     { icon: 'clock', headline: 'Reviewed uploaded document', detail: 'I opened the file on Kenji’s profile and read it as a valid CPR certification.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'The name matches the uploader and the credential checks out, but it expires in 3 weeks. The right move is to file it as a CPR cert so the record is accurate, then set a renewal flag ahead of the expiry so it doesn’t lapse and block his shifts.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'The name matches and the credential checks out, but it expires in 3 weeks. So I’ll file it as a CPR cert and set a renewal flag before expiry, so it doesn’t lapse and block his shifts.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   application_priya: [
     { icon: 'clock', headline: 'Reviewed new application', detail: 'I read Priya’s application against the linked role: CNA · Night Shift · Downtown.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Her CNA license is valid and her availability matches the shift, scoring a 92% match — a strong lead. Rather than let it sit in the queue, I’ll screen it as qualified and reach out with an intro so we move on a good candidate before someone else does.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Valid CNA license and her availability fits the shift — a 92% match, a strong lead. So rather than let it sit in the queue, I’ll screen it qualified and send an intro before someone else moves on her.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   new_shift_forklift: [
     { icon: 'clock', headline: 'Reviewed new shift', detail: 'I read the new shift: Forklift Op · Friday 6:00 AM · Bay 4, certified-only.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Matching the pool turned up 11 certified, available workers — a healthy field with no coverage risk. Since there’s plenty of supply I don’t need to widen the net; I’ll offer it to the top 6 ranked by proximity and reliability and let the first claim take it.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'The pool has 11 certified, available workers — a healthy field, no coverage risk. With supply that deep I won’t widen the net; I’ll offer it to the top 6 by proximity and reliability and let the first claim take it.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   new_user_luis: [
     { icon: 'clock', headline: 'Reviewed new candidate', detail: 'I read the new Candidate record for Luis M. — no tasks on it yet.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Nothing is pre-fillable on file and this is a standard new-candidate setup, so the straightforward path is to kick off onboarding: send a welcome, assign the 5 standard intake tasks, and follow up to completion.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Nothing’s pre-fillable and it’s a standard new-candidate setup. So I’ll kick off onboarding: send a welcome, assign the 5 standard intake tasks, and follow up to completion.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   missed_clockin_james: [
     { icon: 'clock', headline: 'Reviewed missed clock-in', detail: 'I saw James’s 9:00 AM start pass with no clock-in after the 5-minute grace window; his preferred channel is SMS.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'There’s no time-off or release on file, so this is an unexplained gap rather than a planned absence — but it’s early enough that he may simply be running late. Before treating it as a no-show I’ll text him to check if he’s on the way, update the shift with what I learn, and flag the scheduling inbox if he doesn’t respond.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'No time-off or release on file, so this is an unexplained gap — but it’s early enough that he may just be running late. Before calling it a no-show I’ll text him, update the shift with his reply, and flag the scheduling inbox if he doesn’t respond.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   thread_cancel_wed: [
     { icon: 'clock', headline: 'Reviewed inbound message', detail: 'I read the worker’s “I can’t make tomorrow” reply and matched it to her assigned Wed 7:00 AM shift at Pier 9.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'It’s an informal cancellation with no formal release on file, so the shift still reads as covered when it isn’t. To keep the record honest I’ll log it as a release, acknowledge her reply, and start a replacement search right away since the shift is tomorrow.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'It’s an informal cancellation with no release on file, so the shift still reads as covered when it isn’t. To keep the record honest I’ll log a release, acknowledge her, and start a replacement search now since it’s tomorrow.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   payroll_acme_invoice: [
     { icon: 'clock', headline: 'Reviewed approved shift', detail: 'I read the approved bill rate — $48/hr · 8 hrs — and matched it to Acme’s open, net-30 draft invoice.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'There’s no duplicate line for it yet, so it’s safe to add. Rather than open a new invoice, the clean move is to roll the approved shift onto Acme’s existing open invoice and recalculate the total so billing stays consolidated.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'There’s no duplicate line yet, so it’s safe to add. Rather than open a new invoice, I’ll roll the approved shift onto Acme’s open invoice and recalculate the total so billing stays consolidated.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   job_event_staff: [
     { icon: 'clock', headline: 'Reviewed new job', detail: 'I read the job: Event Staff · 20 openings · Saturday 4:00 PM.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Matching the pool ranked 63 eligible workers and filtered out 9 double-booked against Saturday shifts. With 20 slots to fill and good supply, the efficient path is to invite the top matches to claim slots first-come, track responses, and keep a standby list rather than hand-assigning each opening.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'The pool ranked 63 eligible workers, minus 9 double-booked on Saturday. With 20 slots and good supply, I’ll invite the top matches to claim first-come, track responses, and keep a standby list rather than hand-assign each opening.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   missed_clockout_bianca: [
     { icon: 'clock', headline: 'Reviewed open timesheet', detail: 'I saw Bianca’s shift end with no clock-out, leaving her timesheet open; her last geofence ping puts her off-site around 6:05 PM.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'An open punch can’t go through payroll as-is, so I’ve held it from the run. The ping gives a likely end time, but I’d rather confirm it with her than guess — I’ll text Bianca, correct the timesheet with her real end time, and flag payroll so the run isn’t delayed.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'An open punch can’t run through payroll, so I’ve held it from the run. The ping suggests an end time, but I’d rather confirm than guess — I’ll text Bianca, correct the timesheet with her real end time, and flag payroll so the run isn’t delayed.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   schedule_published: [
     { icon: 'clock', headline: 'Reviewed published schedule', detail: 'I scanned next week’s schedule: 84 shifts across 31 workers.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: '22 shifts are still unconfirmed, heaviest on Monday and Tuesday — that’s where the start-of-week risk sits. Confirming now, before the weekend, gives workers time to flag conflicts, so I’ll send confirmations to everyone, chase the unconfirmed, and prepare a Monday-readiness summary.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: '22 shifts are still unconfirmed, heaviest Monday and Tuesday — that’s the start-of-week risk. Confirming before the weekend gives workers time to flag conflicts, so I’ll send confirmations, chase the unconfirmed, and prep a Monday-readiness summary.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   shift_release_jenny: [
     { icon: 'clock', headline: 'Reviewed released shift', detail: 'I read the released shift: Caregiver · Lakeside · Saturday 8:00 AM.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'It’s more than 12 hours out, so this is a standard fill with no coverage risk. Matching the pool surfaced 5 qualified caregivers, so I’ll reach out to the best matches in ranked order and assign the first qualified yes.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'It’s more than 12 hours out, so it’s a standard fill with no coverage risk. The pool has 5 qualified caregivers, so I’ll reach out in ranked order and assign the first qualified yes.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   birthday_tomas: [
     { icon: 'clock', headline: 'Reviewed birthday', detail: 'I matched today to Tomas Greco’s birthday — he’s an active employee on in-app chat.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'He’s active and reachable on in-app chat, so a quick, warm send is appropriate. I’ll send a happy-birthday note from the team.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'He’s active on in-app chat, so a quick, warm send fits. I’ll send a happy-birthday note from the team.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   cred_expired_nadia: [
     { icon: 'clock', headline: 'Reviewed credential lapse', detail: 'A blocking policy flagged that Nadia’s CPR certification lapsed overnight; CPR is required for her role.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Three CPR-gated shifts in the next week are now at risk, but replacements are available for all three. The right move is to pull her from the non-compliant shifts, start a renewal, and line up backfills so coverage holds while she recertifies.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Three CPR-gated shifts next week are now at risk, but replacements are available for all three. So I’ll pull her from the non-compliant shifts, start a renewal, and line up backfills so coverage holds while she recertifies.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   clockin_devon: [
     { icon: 'clock', headline: 'Reviewed clock-in', detail: 'Devon clocked in at Eastgate Warehouse; I checked it against the geofence and required fields.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'It’s a clean punch inside the geofence with every required field present, so it’s payroll-ready. Rather than let it sit unapproved before the run, I’ll confirm the geofence and fields and approve it for payroll.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'It’s a clean punch inside the geofence with every required field present, so it’s payroll-ready. Rather than let it sit before the run, I’ll approve it for payroll.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   phone_aisha: [
     { icon: 'clock', headline: 'Reviewed profile update', detail: 'Aisha updated her phone number — it’s the contact her notifications go to.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Because it’s her notification contact, a wrong number means missed shift alerts. The safe move is to send a quick verification ping and, once it checks out, update the contact on file so alerts keep reaching her.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Since it’s her notification contact, a wrong number means missed shift alerts. So I’ll send a quick verification ping and, once it checks out, update the contact on file so alerts keep reaching her.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   fill_confirmed_maria: [
     { icon: 'clock', headline: 'Reviewed autonomous fill', detail: 'My fill for Maria’s open RN shift surfaced Sarah Quinn — available and within radius for Riverside Clinic.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Sarah clears every policy and is available, so she’s a clean match. I’ll confirm the assignment and notify the scheduler so the roster reflects the coverage — pending your go-ahead since it commits a worker to the shift.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Sarah clears every policy and is available — a clean match. I’ll confirm the assignment and notify the scheduler so the roster’s accurate — pending your go-ahead, since it commits a worker to the shift.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   weekly_fill_report: [
     { icon: 'clock', headline: 'Reviewed scheduled report', detail: 'The weekly fill-rate report ran — 22 of next week’s shifts are under target, heaviest on Monday and Tuesday.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'The gaps are concentrated early in the week, so they’re fixable if scheduling sees them now. I’ll publish the report and flag the at-risk shifts to the scheduling team so they can act before the week starts.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'The gaps cluster early in the week, so they’re fixable if scheduling sees them now. I’ll publish the report and flag the at-risk shifts so the team can act before the week starts.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
   invoice_paid_4821: [
     { icon: 'clock', headline: 'Reviewed paid invoice', detail: 'A client marked invoice #4821 paid outside Teambridge; the open balance is still showing in the ledger.' },
-    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'The payment was recorded out-of-band, so the record won’t close on its own. I’ll reconcile the amount against the open balance and, once it matches, close the invoice so billing stays accurate.' },
+    { icon: 'chart', headline: 'Determine recommended course of action', detail: 'Paid out-of-band, so the record won’t close on its own. I’ll reconcile the amount against the open balance and, once it matches, close the invoice so billing stays accurate.' },
     { icon: 'done', headline: 'Plan created and shared', detail: '' },
   ],
 };
@@ -905,94 +912,94 @@ export const THREAD_TASKS: Record<string, PlanTask[]> = {
     { label: 'Notify the location manager', detail: 'Notify the location manager of the last-minute scheduling change.', person: { name: 'Dana Cole', avatarSeed: 'scheduler_dana' } },
   ],
   timeoff_sofia: [
-    { label: 'Confirm the PTO balance covers it' },
-    { label: 'Auto-approve the Thursday portion' },
-    { label: 'Flag Friday for you', person: { name: 'You', avatarSeed: 'operator' } },
+    { label: 'Confirm the PTO balance covers it', detail: 'Check her balance against the two requested days off.' },
+    { label: 'Auto-approve the Thursday portion', detail: 'Thursday stays fully covered, so approve it outright.' },
+    { label: 'Flag Friday for you', detail: 'Friday’s coverage is thin — hold it for your call.', person: { name: 'You', avatarSeed: 'operator' } },
   ],
   document_kenji: [
-    { label: 'Set the type to CPR Cert and save the expiry' },
-    { label: 'Mark the credential verified' },
-    { label: 'Flag that it expires soon' },
+    { label: 'Set the type to CPR Cert and save the expiry', detail: 'File the upload as a CPR certification with its expiry date.' },
+    { label: 'Mark the credential verified', detail: 'Update Kenji’s profile so the record reads as valid.' },
+    { label: 'Flag that it expires soon', detail: 'Set a renewal reminder ahead of the 3-week expiry.' },
   ],
   application_priya: [
-    { label: 'Update the status to Qualified' },
-    { label: 'Send a warm intro message' },
-    { label: 'Ask the two screening questions' },
-    { label: 'Move to the recruiter’s queue on reply' },
+    { label: 'Update the status to Qualified', detail: 'Move the application forward off the strong 92% match.' },
+    { label: 'Send a warm intro message', detail: 'Reach out to confirm her interest in the role.' },
+    { label: 'Ask the two screening questions', detail: 'Cover the basics before the recruiter handoff.' },
+    { label: 'Move to the recruiter’s queue on reply', detail: 'Hand off to the recruiter once she responds.' },
   ],
   new_shift_forklift: [
-    { label: 'Offer to the top matches in ranked order', showsCandidates: true },
-    { label: 'Assign the first claim that clears policy' },
-    { label: 'Confirm and update the calendar' },
+    { label: 'Offer to the top matches in ranked order', detail: 'Send the shift to the 6 best certified workers by proximity and reliability.', showsCandidates: true },
+    { label: 'Assign the first claim that clears policy', detail: 'Take the first claim that passes the certification check.' },
+    { label: 'Confirm and update the calendar', detail: 'Lock in the assignment and reflect it on the schedule.' },
   ],
   new_user_luis: [
-    { label: 'Send Luis a welcome message' },
-    { label: 'Assign the required intake tasks' },
-    { label: 'Follow up until everything’s completed' },
+    { label: 'Send Luis a welcome message', detail: 'Kick off onboarding for the new candidate.', person: { name: 'Luis Mendez', avatarSeed: 'new_user_luis' } },
+    { label: 'Assign the required intake tasks', detail: 'Add the 5 standard intake tasks to his record.' },
+    { label: 'Follow up until everything’s completed', detail: 'Track each task through to completion.' },
   ],
   missed_clockin_james: [
-    { label: 'Text James to ask if he’s on his way', person: { name: 'James Okoro', avatarSeed: 'missed_clockin_james' } },
-    { label: 'Update the shift’s confirmation status' },
-    { label: 'Flag the scheduling inbox if he’s a no-show' },
+    { label: 'Text James to ask if he’s on his way', detail: 'Reach him on SMS, his preferred channel, before calling it a no-show.', person: { name: 'James Okoro', avatarSeed: 'missed_clockin_james' } },
+    { label: 'Update the shift’s confirmation status', detail: 'Reflect whatever he replies on the shift record.' },
+    { label: 'Flag the scheduling inbox if he’s a no-show', detail: 'Escalate to scheduling if he doesn’t respond.' },
   ],
   thread_cancel_wed: [
-    { label: 'Record the shift as released on her behalf' },
-    { label: 'Reply to acknowledge she’s off it' },
-    { label: 'Start a replacement search for the Wed shift' },
+    { label: 'Record the shift as released on her behalf', detail: 'Log the informal cancellation as a formal release.' },
+    { label: 'Reply to acknowledge she’s off it', detail: 'Confirm to her that she’s off the Wed shift.' },
+    { label: 'Start a replacement search for the Wed shift', detail: 'Open a fill right away since the shift is tomorrow.' },
   ],
   payroll_acme_invoice: [
-    { label: 'Add the shift as a line item' },
-    { label: 'Recalculate the invoice total and terms' },
-    { label: 'Keep the draft ready for your review' },
+    { label: 'Add the shift as a line item', detail: 'Post the approved $48/hr · 8 hr shift to Acme’s open invoice.' },
+    { label: 'Recalculate the invoice total and terms', detail: 'Update the total and keep the net-30 terms.' },
+    { label: 'Keep the draft ready for your review', detail: 'Hold it for your end-of-week review.' },
   ],
   job_event_staff: [
-    { label: 'Invite the top 40 matches', showsCandidates: true },
-    { label: 'Fill the 20 openings first-come' },
-    { label: 'Keep a standby list and notify you at 80%' },
+    { label: 'Invite the top 40 matches', detail: 'Send slot invitations to the best-ranked eligible workers.', showsCandidates: true },
+    { label: 'Fill the 20 openings first-come', detail: 'Assign slots as claims arrive until all 20 are filled.' },
+    { label: 'Keep a standby list and notify you at 80%', detail: 'Hold backups in reserve and ping you once 16 slots fill.' },
   ],
   missed_clockout_bianca: [
-    { label: 'Text Bianca to confirm her actual end time' },
-    { label: 'Update the timesheet from her reply' },
-    { label: 'Flag payroll if she doesn’t respond' },
+    { label: 'Text Bianca to confirm her actual end time', detail: 'Verify the end time rather than guess from the geofence ping.', person: { name: 'Bianca Rossi', avatarSeed: 'missed_clockout_bianca' } },
+    { label: 'Update the timesheet from her reply', detail: 'Correct the open punch with her real end time.' },
+    { label: 'Flag payroll if she doesn’t respond', detail: 'Escalate so the run isn’t delayed.' },
   ],
   schedule_published: [
-    { label: 'Message all workers to confirm' },
-    { label: 'Chase the unconfirmed with a reminder' },
-    { label: 'Give you a Monday-readiness summary' },
+    { label: 'Message all workers to confirm', detail: 'Send confirmations across next week’s 84 shifts before the weekend.' },
+    { label: 'Chase the unconfirmed with a reminder', detail: 'Follow up on the 22 still-unconfirmed shifts.' },
+    { label: 'Give you a Monday-readiness summary', detail: 'Report where start-of-week coverage stands.' },
   ],
   shift_release_jenny: [
-    { label: 'Message the best-matched replacements', showsCandidates: true },
-    { label: 'Assign the first qualified yes' },
-    { label: 'Confirm the fill and update the schedule' },
+    { label: 'Message the best-matched replacements', detail: 'Reach out to the 5 qualified caregivers in ranked order.', showsCandidates: true },
+    { label: 'Assign the first qualified yes', detail: 'Take the first replacement who clears policy.' },
+    { label: 'Confirm the fill and update the schedule', detail: 'Lock in the assignment and update the roster.' },
   ],
   weekly_fill_report: [
-    { label: 'Publish the report to the Home dashboard' },
-    { label: 'Flag the 22 under-target shifts' },
-    { label: 'Notify scheduling of the Mon–Tue gaps', person: { name: 'Dana Cole', avatarSeed: 'scheduler_dana' } },
+    { label: 'Publish the report to the Home dashboard', detail: 'Make the weekly fill-rate report visible to the team.' },
+    { label: 'Flag the 22 under-target shifts', detail: 'Highlight the gaps, heaviest on Monday and Tuesday.' },
+    { label: 'Notify scheduling of the Mon–Tue gaps', detail: 'Hand the at-risk shifts to scheduling to act on.', person: { name: 'Dana Cole', avatarSeed: 'scheduler_dana' } },
   ],
   clockin_devon: [
-    { label: 'Re-check the geofence and required fields' },
-    { label: 'Approve the clock-in for payroll' },
+    { label: 'Re-check the geofence and required fields', detail: 'Confirm the punch is inside the geofence with all fields present.' },
+    { label: 'Approve the clock-in for payroll', detail: 'Clear it for the upcoming payroll run.' },
   ],
   phone_aisha: [
-    { label: 'Send a verification ping to the new number', person: { name: 'Aisha Bello', avatarSeed: 'phone_aisha' } },
-    { label: 'Update her notification contact on reply' },
-    { label: 'Confirm shift alerts route to it' },
+    { label: 'Send a verification ping to the new number', detail: 'Confirm the updated number actually reaches her.', person: { name: 'Aisha Bello', avatarSeed: 'phone_aisha' } },
+    { label: 'Update her notification contact on reply', detail: 'Save the new number once it checks out.' },
+    { label: 'Confirm shift alerts route to it', detail: 'Make sure shift alerts keep reaching her.' },
   ],
   fill_confirmed_maria: [
-    { label: 'Confirm Sarah Quinn for the shift', person: { name: 'Sarah Quinn', avatarSeed: 'sarah_quinn' } },
-    { label: 'Update the roster' },
-    { label: 'Notify the scheduler', person: { name: 'Dana Cole', avatarSeed: 'scheduler_dana' } },
+    { label: 'Confirm Sarah Quinn for the shift', detail: 'Commit Sarah to the open RN shift at Riverside.', person: { name: 'Sarah Quinn', avatarSeed: 'sarah_quinn' } },
+    { label: 'Update the roster', detail: 'Reflect the coverage on the schedule.' },
+    { label: 'Notify the scheduler', detail: 'Let the scheduler know the shift is covered.', person: { name: 'Dana Cole', avatarSeed: 'scheduler_dana' } },
   ],
   invoice_paid_4821: [
-    { label: 'Reconcile the payment against the open balance' },
-    { label: 'Close the invoice once it clears' },
-    { label: 'Update the ledger' },
+    { label: 'Reconcile the payment against the open balance', detail: 'Match the out-of-band payment to invoice #4821.' },
+    { label: 'Close the invoice once it clears', detail: 'Mark it paid so the record is accurate.' },
+    { label: 'Update the ledger', detail: 'Clear the open balance from the books.' },
   ],
   cred_expired_nadia: [
-    { label: 'Flag her 3 upcoming shifts as at-risk' },
-    { label: 'Assign Nadia a renewal task with the upload' },
-    { label: 'Offer to backfill the shifts she can’t work' },
+    { label: 'Flag her 3 upcoming shifts as at-risk', detail: 'Mark the CPR-gated shifts her lapse now blocks.' },
+    { label: 'Assign Nadia a renewal task with the upload', detail: 'Start her recertification with a document upload.', person: { name: 'Nadia Haddad', avatarSeed: 'cred_expired_nadia' } },
+    { label: 'Offer to backfill the shifts she can’t work', detail: 'Line up available replacements so coverage holds.' },
   ],
 };
 

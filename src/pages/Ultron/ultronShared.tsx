@@ -116,6 +116,31 @@ export const STATUS_META: Record<ThreadStatus, StatusMeta> = {
   workflow_available: { label: 'Workflow ready', tag: 'neutral' },
 };
 
+/** Contextual composer placeholder — the prompt adapts to where the case sits in
+ *  its lifecycle, so the input invites the right kind of message: a steer while a
+ *  decision is pending, context while Ultron analyzes, a follow-up once it's done.
+ *  `replying` wins (Ultron is mid-response). Falls back to the generic prompt. */
+export function composerPlaceholder(status: ThreadStatus, replying?: boolean): string {
+  if (replying) return 'Ultron is replying…';
+  switch (status) {
+    case 'analyzing':
+      return 'Add context while Ultron analyzes…';
+    case 'needs_approval':
+    case 'recommended':
+    case 'unresolved':
+      return 'Tell Ultron what to do…';
+    case 'in_progress':
+    case 'monitoring':
+      return 'Ask Ultron about this case…';
+    case 'resolved':
+    case 'auto_resolved':
+    case 'workflow_available':
+      return 'Ask a follow-up or refine the result…';
+    default:
+      return 'Message Ultron…';
+  }
+}
+
 // ── Membership / partitioning ────────────────────────────────────────────────
 
 /** Deck membership: a thread awaiting a human decision. */

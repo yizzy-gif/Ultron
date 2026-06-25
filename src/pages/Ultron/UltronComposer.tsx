@@ -28,13 +28,14 @@ interface UltronComposerProps {
   placeholder?: string;
 }
 
-/** A filled rounded square — the stop glyph the send button shows while Ultron
+/** An outlined rounded square — the stop glyph the send button shows while Ultron
  *  is replying (the chat-composer convention for interrupting a response).
- *  Alloy has no stop icon, so it's drawn inline on the 24px icon grid. */
-function StopGlyph({ size = 18 }: { size?: number }) {
+ *  Alloy has no stop icon, so it's drawn inline on the 24px icon grid, stroked to
+ *  match the other line icons. */
+function StopGlyph({ size = 20 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <rect x="7" y="7" width="10" height="10" rx="2.5" fill="currentColor" />
+      <rect x="6" y="6" width="12" height="12" rx="3" stroke="currentColor" strokeWidth={1.75} />
     </svg>
   );
 }
@@ -95,6 +96,7 @@ export function UltronComposer({ onSend, working = false, onStop, placeholder = 
           stays enabled so the operator can interrupt the in-flight response. */}
       {working ? (
         <SendButton
+          $float
           type="button"
           variant="primary"
           size="sm"
@@ -102,7 +104,7 @@ export function UltronComposer({ onSend, working = false, onStop, placeholder = 
           aria-label="Stop"
           onClick={onStop}
         >
-          <StopGlyph size={18} />
+          <StopGlyph size={20} />
         </SendButton>
       ) : (
         <SendButton
@@ -148,8 +150,10 @@ const Bar = styled.form`
 const Field = styled.textarea`
   flex: 1;
   min-width: 0;
-  /* Pad the text down so a single line sits centered against the 32px send button. */
-  padding: var(--space-2) 0;
+  /* Size a single line to exactly the 32px send button (space-8) so, with the
+     bar's flex-end alignment, the resting input and button share one centered
+     row; extra lines then grow upward while the button stays pinned at the foot. */
+  padding: calc((var(--space-8) - 1lh) / 2) 0;
   border: none;
   background: transparent;
   resize: none;
@@ -165,7 +169,7 @@ const Field = styled.textarea`
 
 /* Circular send button — the inverse-surface primary fill shared with the
    decision pills, so it flips with the theme. */
-const SendButton = styled(Button)`
+const SendButton = styled(Button)<{ $float?: boolean }>`
   flex-shrink: 0;
   border-radius: var(--radius-full);
 
@@ -173,4 +177,12 @@ const SendButton = styled(Button)`
     background: var(--color-bg-inverse-primary) !important;
     color: var(--color-content-inverse-primary) !important;
   }
+
+  /* Float style — the processing/stop control reads as a quiet inline glyph
+     rather than a solid send pill: transparent surface, content-primary icon. */
+  ${p => p.$float && `
+  &[data-variant='primary'] {
+    background: transparent !important;
+    color: var(--color-content-primary) !important;
+  }`}
 `;

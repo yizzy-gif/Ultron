@@ -54,7 +54,7 @@ export function ActivityTrailCards({ milestones, typingIndex, collapsed, working
    *  <UltronResponse> set, which lifts the feedback below the reply text instead. */
   hideActions?: boolean;
   /** Whether Ultron is actively running this group right now — drives the header's
-   *  live status (Thinking → Working → Multi-tasking) instead of the settled
+   *  live status (Thinking → Bridging → … → Crossing) instead of the settled
    *  "Thought for X" recap. */
   running?: boolean;
 }) {
@@ -172,7 +172,7 @@ function ActivitySession({ milestones, typingIndex, workingIndex, settled, hideA
   const thought = thinkSecs < 60 ? `${thinkSecs} sec` : `${Math.round(thinkSecs / 60)} min`;
   const summary = `Thought for ${thought}`;
   // While Ultron is actively running this group the summary shows a live status
-  // that advances Thinking → Working → Multi-tasking; once the group is done it
+  // that advances Thinking → Bridging → … → Crossing; once the group is done it
   // settles to the completed "Thought for X" recap.
 
   return (
@@ -243,10 +243,12 @@ function ActivitySession({ milestones, typingIndex, workingIndex, settled, hideA
 }
 
 /** The live status shown in a group's header while Ultron is running it: advances
- *  Thinking → Working → Multi-tasking on a timer and holds on the last beat (with
- *  an animated ellipsis) until the work catches up, at which point the header
- *  swaps to the settled "Thought for X" recap. */
-const RUN_PHASES = ['Thinking', 'Working', 'Multi-tasking'];
+ *  Thinking → Bridging → Reinforcing → Inspecting → Crossing on a timer and holds
+ *  on the last beat (with an animated ellipsis) until the work catches up, at
+ *  which point the header swaps to the settled "Thought for X" recap. The verbs
+ *  trace the bridge metaphor: reason, connect people to the need, shore up
+ *  coverage, verify, then bring it home. */
+const RUN_PHASES = ['Thinking', 'Bridging', 'Reinforcing', 'Inspecting', 'Crossing'];
 
 function RunningLabel() {
   const [phase, setPhase] = useState(0);

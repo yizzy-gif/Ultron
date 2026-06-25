@@ -9,7 +9,7 @@
 import { useEffect, useState, Fragment, type ReactNode } from 'react';
 import styled, { keyframes } from 'styled-components';
 import {
-  Avatar, Button, Save01Icon, MinusIcon, ChevronSelectorVerticalIcon, ChevronRightIcon, CheckIcon, LinkExternal01Icon, XCloseIcon, AlertTriangleIcon,
+  Avatar, Button, Save01Icon, MinusIcon, ChevronSelectorVerticalIcon, ChevronRightIcon, CheckIcon, LinkExternal01Icon, AlertTriangleIcon,
 } from 'alloy-design-system';
 import type { ChatMessage, ThreadItem } from './types';
 import {
@@ -264,11 +264,9 @@ interface UltronActionCardProps {
   onAction: (threadId: string, label: string) => void;
   onRefinement: (label: string) => void;
   onSaveWorkflow: (thread: ThreadItem) => void;
-  /** Dismiss the decision surface (hides this card). */
-  onDismiss?: (threadId: string) => void;
 }
 
-export function UltronActionCard({ thread, stage, onAction, onRefinement, onSaveWorkflow, onDismiss }: UltronActionCardProps) {
+export function UltronActionCard({ thread, stage, onAction, onRefinement, onSaveWorkflow }: UltronActionCardProps) {
   const [savedWorkflow, setSavedWorkflow] = useState(false);
   const { actionable, onFollowUp, prompt, records, primaryLabel, purple } = deriveCase(thread, stage);
 
@@ -293,19 +291,6 @@ export function UltronActionCard({ thread, stage, onAction, onRefinement, onSave
 
   return (
     <ActionCard data-tone={toneFor(thread)}>
-      {onDismiss && (
-        <DismissSlot>
-          <Button
-            variant="ghost"
-            size="xs"
-            iconOnly
-            aria-label="Dismiss"
-            onClick={() => onDismiss(thread.id)}
-          >
-            <XCloseIcon size={16} />
-          </Button>
-        </DismissSlot>
-      )}
       {actionable && <Prompt>{prompt}</Prompt>}
       {/* Workflow-ready / resolved rows aren't a decision — they just offer to
           save the resolved play. Ask for it explicitly above the Save button. */}
@@ -370,7 +355,11 @@ function PlanTaskList({ tasks, records }: { tasks: PlanTask[]; records: RecordRe
     <TaskList>
       {tasks.map((task, i) => (
         <TaskRow key={i}>
-          <TaskMarker aria-hidden="true">{i + 1}</TaskMarker>
+          {/* Leading timeline rail: a dot per step threaded by one continuous
+             vertical line (clipped at the first and last dots). */}
+          <TaskRail data-first={i === 0 || undefined} data-last={i === tasks.length - 1 || undefined} aria-hidden="true">
+            <TaskDot />
+          </TaskRail>
           <TaskText>
             <TaskLabel>{task.label}</TaskLabel>
             {task.detail && <TaskDetail>{task.detail}</TaskDetail>}
@@ -759,7 +748,7 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
     const { isAnalyzingGroup, isStreamingGroup, groupSettling } = activityFlags(gi);
     const settled = inResponse ? false : groupSettling;
     const markIndex = (isStreamingGroup || settled) ? g.milestones.length - 1 : undefined;
-    // The group reads as live — header cycling Thinking → Working → Multi-tasking
+    // The group reads as live — header cycling Thinking → Bridging → … → Crossing
     // — while Ultron is genuinely running it: the reasoning group during analysis,
     // and the latest work group while the case executes. It settles to "Thought
     // for X" once analysis concludes / the case resolves (or while it monitors).
@@ -1089,9 +1078,6 @@ const ActionCard = styled.div`
   border: 1px solid var(--color-border-opaque);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-below-low);
-
-  /* Reserve room so the prompt never slides under the absolute dismiss button. */
-  > p { padding-right: var(--space-8); }
 `;
 
 /* Keyboard hint under the action row — Alloy paragraph / small, muted. */
@@ -1103,13 +1089,6 @@ const SkipHint = styled.p`
   line-height: var(--line-height-relaxed);
   letter-spacing: var(--tracking-normal);
   color: var(--color-content-inverse-tertiary);
-`;
-
-/* Dismiss button — pinned to the card's top-right corner, inset by the card padding. */
-const DismissSlot = styled.div`
-  position: absolute;
-  top: var(--space-3);
-  right: var(--space-3);
 `;
 
 /* The whole header is the accordion toggle — a real button reset to look like
@@ -1398,24 +1377,47 @@ const TaskRow = styled.div`
   }
 `;
 
-/* Numbered step marker — a small circle carrying the task's order. */
-const TaskMarker = styled.span`
-  display: inline-flex;
+/* Leading timeline rail — a fixed column carrying the step's dot, with a vertical
+   line running the full row height (centered on the dot). Consecutive rows abut
+   (no list gap), so the lines join into one continuous thread; the first row
+   starts the line at its dot and the last row ends it there. */
+const TaskRail = styled.div`
+  position: relative;
+  flex-shrink: 0;
+  align-self: stretch;
+  width: var(--space-5);
+  display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  width: var(--space-6);
-  height: var(--space-6);
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    top: 0;
+    bottom: 0;
+    width: 1.5px;
+    background: var(--color-border-opaque);
+  }
+  &[data-first]::before { top: 50%; }
+  &[data-last]::before { bottom: 50%; }
+`;
+
+/* The step dot — sits above the line, ringed in the card surface so the line
+   reads as connecting to it rather than passing through. */
+const TaskDot = styled.span`
+  position: relative;
+  z-index: 1;
+  width: var(--space-2);
+  height: var(--space-2);
   border-radius: var(--radius-full);
-  background: var(--color-bg-tertiary);
-  font-family: var(--font-sans);
-  font-size: var(--text-xs);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-content-secondary);
+  background: var(--color-content-tertiary);
+  box-shadow: 0 0 0 3px var(--color-bg-primary);
 `;
 
 /* The task's text column — title above its optional secondary line, taking the
-   row's flexible width between the marker and the trailing slot. */
+   row's flexible width before the trailing slot. */
 const TaskText = styled.div`
   flex: 1;
   min-width: 0;

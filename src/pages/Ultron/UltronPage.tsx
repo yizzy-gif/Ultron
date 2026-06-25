@@ -105,8 +105,6 @@ export function UltronPage({
 
   // Accordion: at most one card open at a time, defaulting to the selected case.
   const [expandedId, setExpandedId] = useState<string | null>(() => selectedId ?? null);
-  // Cases whose docked decision surface the user has dismissed.
-  const [dismissedDockIds, setDismissedDockIds] = useState<string[]>([]);
 
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   // The scroll viewport and its feed content — used to follow the stream: as new
@@ -210,11 +208,7 @@ export function UltronPage({
   const dockEligible = !!pagedThread &&
     (['needs_approval', 'recommended', 'unresolved', 'resolved', 'auto_resolved', 'monitoring'].includes(pagedThread.status)
       || isPurpleRow(pagedThread));
-  // The dock can be dismissed per case; once dismissed the prompt card is gone
-  // but the event card stays in its docked (collapsed) treatment — the actions
-  // don't pop back inline.
-  const dockThread = dockEligible && pagedThread && !dismissedDockIds.includes(pagedThread.id)
-    ? pagedThread : null;
+  const dockThread = dockEligible && pagedThread ? pagedThread : null;
   // When the decision is docked and the event card has no body of its own, the
   // card collapses to a compact summary (title + recommendation, flat tonal bg,
   // no border). Resolved/settled cases stay expanded to show their outcome — as
@@ -353,7 +347,6 @@ export function UltronPage({
                 onAction={onAction}
                 onRefinement={onRefinement}
                 onSaveWorkflow={onSaveWorkflow}
-                onDismiss={id => setDismissedDockIds(prev => prev.includes(id) ? prev : [...prev, id])}
               />
             )}
             {/* DEMO ONLY — while a case is analyzing, its "Trigger Needs approval"

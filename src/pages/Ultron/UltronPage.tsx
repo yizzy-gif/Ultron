@@ -299,6 +299,16 @@ export function UltronPage({
                     chat={chatByThread[thread.id] ?? []}
                     replying={replyingIds.includes(thread.id)}
                     analyzing={analyzing}
+                    actionCard={dockThread && dockThread.id === thread.id ? (
+                      <UltronActionCard
+                        key={`action-${dockThread.id}`}
+                        thread={dockThread}
+                        stage={stageById[dockThread.id] ?? 0}
+                        onAction={onAction}
+                        onRefinement={onRefinement}
+                        onSaveWorkflow={onSaveWorkflow}
+                      />
+                    ) : undefined}
                   />
                 )}
               </>
@@ -339,16 +349,9 @@ export function UltronPage({
       {paged && pagedCurrentId && pagedThread && (
         <ActionDock>
           <ActionDockInner>
-            {dockThread && (
-              <UltronActionCard
-                key={`action-${dockThread.id}`}
-                thread={dockThread}
-                stage={stageById[dockThread.id] ?? 0}
-                onAction={onAction}
-                onRefinement={onRefinement}
-                onSaveWorkflow={onSaveWorkflow}
-              />
-            )}
+            {/* The decision / save-as-workflow surface now flows inline at the foot
+                of the activity thread (see UltronActivityCards' actionCard slot),
+                so the dock holds only the analyzing trigger + composer. */}
             {/* DEMO ONLY — while a case is analyzing, its "Trigger Needs approval"
                 control docks here (mirrors the decision dock) instead of sitting
                 inside the scrolling analyzing card. */}

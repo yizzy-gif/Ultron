@@ -17,7 +17,7 @@ import {
   THREAD_FOLLOWUPS, THREAD_RECORDS, activityForThread, analyzingSteps,
   WORKING_ACTIVITIES, THREAD_TASKS, casePlan, THREAD_FLAGS, actionAck,
 } from './fixtures';
-import type { ActivityMilestone, WorkingMilestone, PlanTask, RecordRef, AnalyzingStep, EventFlag } from './fixtures';
+import type { ActivityMilestone, WorkingMilestone, PlanTask, AnalyzingStep, EventFlag } from './fixtures';
 import { RecordCard } from './RecordCard';
 import {
   isPurpleRow, isRefinementAction, toneFor, UNRESOLVED_ACTIONS,
@@ -296,7 +296,7 @@ export function UltronActionCard({ thread, stage, onAction, onRefinement, onSave
           save the resolved play. Ask for it explicitly above the Save button. */}
       {offerWorkflow && !actionable && <Prompt>Want me to save this as a reusable workflow?</Prompt>}
       {tasks && tasks.length > 0 ? (
-        <PlanTaskList tasks={tasks} records={records} />
+        <PlanTaskList tasks={tasks} />
       ) : actionable && records.length > 0 ? (
         <RecordList>
           {records.map((r, i) => <RecordCard key={i} record={r} />)}
@@ -348,56 +348,46 @@ export function UltronActionCard({ thread, stage, onAction, onRefinement, onSave
 
 // ── Plan tasks ──────────────────────────────────────────────────────────────
 // The decision's plan as a checklist of discrete tasks Ultron will run if
-// approved. A `showsCandidates` task swaps inline text for a stacked avatar
-// group of the people it would contact (drawn from the thread's records).
-function PlanTaskList({ tasks, records }: { tasks: PlanTask[]; records: RecordRef[] }) {
+// approved.
+function PlanTaskList({ tasks }: { tasks: PlanTask[] }) {
   return (
     <TaskList>
       {tasks.map((task, i) => (
-        <TaskRow key={i}>
-          {/* Leading timeline rail: a dot per step threaded by one continuous
-             vertical line (clipped at the first and last dots). */}
-          <TaskRail data-first={i === 0 || undefined} data-last={i === tasks.length - 1 || undefined} aria-hidden="true">
-            <TaskDot />
-          </TaskRail>
-          <TaskText>
-            <TaskLabel>{task.label}</TaskLabel>
-            {task.detail && <TaskDetail>{task.detail}</TaskDetail>}
-          </TaskText>
-          {task.showsCandidates && records.length > 0 && (
-            <TaskTrailing>
-              <AvatarStack records={records} />
-            </TaskTrailing>
-          )}
-          {/* A named-person task shows its subject as an avatar in the same
-             right-aligned trailing slot as the candidate group above. The name
-             rides along as the avatar's tooltip/alt rather than a visible label. */}
-          {task.person && (
-            <TaskTrailing>
-              <Avatar size="sm" src={threadAvatarUrl(task.person.avatarSeed)} name={task.person.name} alt={task.person.name} />
-            </TaskTrailing>
-          )}
-        </TaskRow>
+        <PlanTaskRow key={i} task={task} first={i === 0} last={i === tasks.length - 1} />
       ))}
     </TaskList>
   );
 }
 
-/** Overlapping avatar group — the first few people, then a "+N" overflow chip
- *  when the list runs longer than the cap. */
-function AvatarStack({ records }: { records: RecordRef[] }) {
-  const MAX = 4;
-  const shown = records.slice(0, MAX);
-  const extra = records.length - shown.length;
+/** A single plan step. Collapsed to just its label by default; the chevron toggles
+ *  open to reveal the secondary description (clamped to two lines). The leading
+ *  rail threads a dot per step into one continuous vertical line. */
+function PlanTaskRow({ task, first, last }: { task: PlanTask; first: boolean; last: boolean }) {
+  const [open, setOpen] = useState(false);
+  const hasDetail = !!task.detail;
   return (
-    <Stack>
-      {shown.map((r, i) => (
-        <StackItem key={r.avatarSeed} style={{ zIndex: shown.length - i }}>
-          <Avatar size="sm" src={threadAvatarUrl(r.avatarSeed)} name={r.title} alt={r.title} />
-        </StackItem>
-      ))}
-      {extra > 0 && <StackOverflow>+{extra}</StackOverflow>}
-    </Stack>
+    <TaskRow>
+      {/* Leading timeline rail: a dot per step threaded by one continuous
+         vertical line (clipped at the first and last dots). */}
+      <TaskRail data-first={first || undefined} data-last={last || undefined} aria-hidden="true">
+        <TaskDot />
+      </TaskRail>
+      <TaskBody>
+        <TaskHeader
+          as={hasDetail ? 'button' : 'div'}
+          type={hasDetail ? 'button' : undefined}
+          $interactive={hasDetail}
+          aria-expanded={hasDetail ? open : undefined}
+          onClick={hasDetail ? () => setOpen(o => !o) : undefined}
+        >
+          <TaskLabel>{task.label}</TaskLabel>
+          {hasDetail && (
+            <TaskChevron data-open={open || undefined} aria-hidden="true"><ChevronRightIcon size={14} /></TaskChevron>
+          )}
+        </TaskHeader>
+        {open && hasDetail && <TaskDetail>{task.detail}</TaskDetail>}
+      </TaskBody>
+    </TaskRow>
   );
 }
 
@@ -531,6 +521,7 @@ export function UltronAnalyzingCard({ thread, onDecide, analyzed, hideTrigger }:
  *  sent message bubble. The trail is a single chronological stream of these. */
 type TrailItem =
   | { kind: 'activity'; milestone: ActivityMilestone }
+  | { kind: 'question'; text: string }
   | { kind: 'message'; text: string }
   | { kind: 'reply'; text: string };
 
@@ -541,7 +532,8 @@ function workingToMilestone(w: WorkingMilestone): ActivityMilestone {
 
 /** Analyzing "thinking" steps carry a headline + detail; fold them into the
  *  accumulated trail as activity milestones so the analysis reads as part of the
- *  one event-activity stream (rather than a separate card above it). */
+ *  one event-activity stream (rather than a separate card above it). The detail
+ *  rides along as the step's collapsible supplemental line (revealed per-step). */
 function analyzingToMilestone(s: AnalyzingStep): ActivityMilestone {
   return { icon: s.icon, headline: s.headline, blocks: s.detail ? [{ text: s.detail }] : undefined };
 }
@@ -588,10 +580,19 @@ function buildTrail(thread: ThreadItem, outbound: string[]): { items: TrailItem[
     (followUp?.working ?? []).map(workingToMilestone),
   ];
 
+  // The question Ultron asked at each stage — kept in the trail (above the
+  // operator's answer) once answered, so the resolved thread still carries the
+  // context of what was being decided.
+  const questionFor = (stage: number) =>
+    stage === 1 && followUp ? followUp.prompt : (THREAD_PROMPTS[thread.id] ?? thread.recommendation);
+
   const items: TrailItem[] = milestones
     .slice(0, reasoningCount)
     .map(m => ({ kind: 'activity', milestone: m } as TrailItem));
   outbound.forEach((text, stage) => {
+    // The answered prompt collapses to just its question text, sitting above the
+    // operator's reply as the context for their answer.
+    items.push({ kind: 'question', text: questionFor(stage) });
     items.push({ kind: 'message', text });
     // The work runs first, then Ultron closes with a short text reply beneath it —
     // so each activity group sits above its response to the operator's action.
@@ -601,7 +602,7 @@ function buildTrail(thread: ThreadItem, outbound: string[]): { items: TrailItem[
   return { items, reasoningCount };
 }
 
-export function UltronActivityCards({ thread, outbound = [], chat = [], replying = false, analyzing = false }: { thread: ThreadItem; outbound?: string[]; chat?: ChatMessage[]; replying?: boolean; analyzing?: boolean }) {
+export function UltronActivityCards({ thread, outbound = [], chat = [], replying = false, analyzing = false, actionCard }: { thread: ThreadItem; outbound?: string[]; chat?: ChatMessage[]; replying?: boolean; analyzing?: boolean; actionCard?: ReactNode }) {
   // `monitoring` (escalated Working case) reveals its full completed trail, like
   // an executing/resolved case rather than stalling at the reasoning steps.
   const executing = thread.status === 'in_progress' || thread.status === 'monitoring';
@@ -627,24 +628,24 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
     if (count >= target) return;
     const cur = items[count];
     const prev = items[count - 1];
-    // The operator's sent message pops in immediately.
-    if (cur?.kind === 'message') {
+    // The answered question and the operator's sent message pop in immediately
+    // (they're context for an already-made decision, not live work).
+    if (cur?.kind === 'question' || cur?.kind === 'message') {
       const t = setTimeout(() => setCount(c => c + 1), 0);
       return () => clearTimeout(t);
     }
-    // After the message, the work group (collapsed) and Ultron's text reply appear
-    // TOGETHER: reveal the whole execution segment — its activity steps plus the
-    // trailing reply — in one beat, so the "Thought for X" summary and the response
-    // land in the same frame rather than the text trailing the steps.
-    if (prev?.kind === 'message') {
-      let end = count;
-      while (end < items.length && items[end].kind === 'activity') end++;
-      if (end < items.length && items[end].kind === 'reply') end++;
-      const t = setTimeout(() => setCount(Math.min(end, target)), POST_REPLY_MS);
+    // Ultron's trailing reply (and its feedback row) lands a short beat after the
+    // work has finished streaming.
+    if (cur?.kind === 'reply') {
+      const t = setTimeout(() => setCount(c => c + 1), POST_REPLY_MS);
       return () => clearTimeout(t);
     }
-    // Otherwise pace one item at a time — the live reasoning stream during analysis.
-    const t = setTimeout(() => setCount(c => c + 1), ACTIVITY_STEP_MS);
+    // Activity steps stream in one at a time — each appears in its loading state
+    // (spinner) and settles to a check as the next reveals. This drives both the
+    // analysis reasoning and the post-approval work; the first work step follows
+    // the operator's message after a short beat, then the rest pace out.
+    const delay = prev?.kind === 'message' ? POST_REPLY_MS : ACTIVITY_STEP_MS;
+    const t = setTimeout(() => setCount(c => c + 1), delay);
     return () => clearTimeout(t);
   }, [count, target]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -652,8 +653,9 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
   // message bubbles, so each run renders as one flush activity block and the
   // messages sit between them.
   const revealed = items.slice(0, count);
-  const groups: ({ type: 'acts'; milestones: ActivityMilestone[] } | { type: 'msg'; text: string } | { type: 'reply'; text: string })[] = [];
+  const groups: ({ type: 'acts'; milestones: ActivityMilestone[] } | { type: 'question'; text: string } | { type: 'msg'; text: string } | { type: 'reply'; text: string })[] = [];
   for (const it of revealed) {
+    if (it.kind === 'question') { groups.push({ type: 'question', text: it.text }); continue; }
     if (it.kind === 'message') { groups.push({ type: 'msg', text: it.text }); continue; }
     if (it.kind === 'reply') { groups.push({ type: 'reply', text: it.text }); continue; }
     const last = groups[groups.length - 1];
@@ -703,24 +705,10 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
   // While executing, the working group settles its OWN mark in place (it glides
   // down + morphs lines → magnetic), so the separate foot mark stays out of the
   // way — otherwise the in-trail mark would vanish and this one would pop in below.
-  // Once Ultron has finished reasoning a case it communicates its read as a short
-  // message right after the (collapsed) thinking group: the situation + the plan
-  // it shaped. This message is PERSISTENT — it stays put through the whole
-  // lifecycle (awaiting → working → resolved) rather than vanishing the moment the
-  // operator acts, so the thread keeps its history (the read + flag card) as new
-  // messages and work land below it. Shown once the reasoning has finished
-  // streaming, on any post-analysis case (awaiting, executing, or resolved).
-  const awaitingDecision = thread.status === 'needs_approval' || thread.status === 'recommended';
-  const concluded = awaitingDecision || resolved || thread.status === 'workflow_available';
-  const reasoningRevealed = count >= reasoningCount;
-  const showPlanMessage = (concluded || executing) && reasoningRevealed && revealed.length > 0;
-  // Position the plan message right after the reasoning group(s) and before the
-  // first sent message, so it reads chronologically: think → plan → act → work.
+  // The activity wrapper shows only Ultron's activities (the "Thought for X"
+  // trails) and the docked decision surface — no prose narration. Work groups
+  // still need to know where the operator's first message sits in the trail.
   const firstMsgIdx = groups.findIndex(g => g.type === 'msg');
-  const planAnchorIdx = firstMsgIdx === -1 ? groups.length - 1 : firstMsgIdx - 1;
-  const planNode = showPlanMessage
-    ? <UltronPlanMessage paragraphs={casePlan(thread, outbound.length > 0)} flag={THREAD_FLAGS[thread.id]} />
-    : null;
 
 
   // Per-group live-state flags — whether a group is the live working/analysis run,
@@ -742,12 +730,17 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
   // Render one activity group (the "Thought for X" trail). When it sits inside a
   // response set (`inResponse`), its own feedback row is suppressed (the set lifts
   // it below the reply text) and it never settles its own mark below the steps —
-  // the set's trailing mark carries the resting presence instead.
-  const renderActivity = (gi: number, inResponse: boolean) => {
+  // the set's trailing mark carries the resting presence instead. `hideActions`
+  // defaults to `inResponse` but can be forced on independently — used to lift the
+  // feedback row below the trailing decision card (so it closes out the turn).
+  const renderActivity = (gi: number, inResponse: boolean, hideActions: boolean = inResponse) => {
     const g = groups[gi] as { type: 'acts'; milestones: ActivityMilestone[] };
-    const { isAnalyzingGroup, isStreamingGroup, groupSettling } = activityFlags(gi);
+    const { groupSettling } = activityFlags(gi);
     const settled = inResponse ? false : groupSettling;
-    const markIndex = (isStreamingGroup || settled) ? g.milestones.length - 1 : undefined;
+    // The mark only rests at the foot once the group settles — it no longer rides
+    // the active icon while streaming; that step now carries an inline loading
+    // spinner instead (see MilestoneIcon).
+    const markIndex = settled ? g.milestones.length - 1 : undefined;
     // The group reads as live — header cycling Thinking → Bridging → … → Crossing
     // — while Ultron is genuinely running it: the reasoning group during analysis,
     // and the latest work group while the case executes. It settles to "Thought
@@ -757,10 +750,12 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
       <ActivityTrailCards
         milestones={g.milestones}
         typingIndex={gi === lastActsIdx && typingOn ? g.milestones.length - 1 : undefined}
-        collapsed={!isAnalyzingGroup}
+        /* Every group opens expanded by default so the operator sees the steps
+           without a click; the header still toggles it shut. */
+        collapsed={false}
         workingIndex={markIndex}
         settled={settled}
-        hideActions={inResponse}
+        hideActions={hideActions}
         running={running}
       />
     );
@@ -772,11 +767,13 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
   // groups and operator messages stay standalone.
   type RenderUnit =
     | { kind: 'acts'; gi: number }
+    | { kind: 'question'; text: string }
     | { kind: 'msg'; text: string }
     | { kind: 'response'; gi: number; text: string };
   const units: RenderUnit[] = [];
   for (let i = 0; i < groups.length; i++) {
     const g = groups[i];
+    if (g.type === 'question') { units.push({ kind: 'question', text: g.text }); continue; }
     if (g.type === 'msg') { units.push({ kind: 'msg', text: g.text }); continue; }
     if (g.type === 'reply') { units.push({ kind: 'response', gi: -1, text: g.text }); continue; }
     const next = groups[i + 1];
@@ -789,9 +786,12 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
   // double it — hold it back so the set's own mark is the sole trailing presence.
   const lastChat = chat[chat.length - 1];
   const lastUnit = units[units.length - 1];
+  // A response set normally carries the trailing mark — UNLESS it carries the
+  // decision card too, in which case its mark stands down and the foot mark drops
+  // below the card instead (so the mark sits after the last Ultron output).
   const trailingHasMark = chat.length > 0
     ? (lastChat.role === 'ultron' || replying)
-    : (!!lastUnit && lastUnit.kind === 'response');
+    : (!!lastUnit && lastUnit.kind === 'response' && !(actionCard && lastUnit.gi >= 0));
 
   // Ultron's identity mark lives at the foot of the thread for the pre-reply
   // states (reasoning, plan, work-in-flight) — it animates while Ultron runs work
@@ -800,18 +800,41 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
   const showFootMark = revealed.length > 0 && !analyzing && !trailingHasMark;
   const footActive = replying || executing;
 
+  // The decision / save-as-workflow surface sits directly under the LATEST activity
+  // group — so each ask reads as Ultron's current question right after its most
+  // recent thinking. For the first decision that's the reasoning group; for a
+  // follow-up it's the work group Ultron just finished (e.g. "messaged Renee →
+  // she replied yes"), so the follow-up prompt lands beneath that, not back up
+  // under the original reasoning. A `response` unit carries an activity group too,
+  // so it counts as an anchor.
+  const lastActivityUnitIdx = (() => {
+    for (let i = units.length - 1; i >= 0; i--) {
+      const u = units[i];
+      if (u.kind === 'acts' || (u.kind === 'response' && u.gi >= 0)) return i;
+    }
+    return -1;
+  })();
+
   return (
     <>
-      {planAnchorIdx < 0 && planNode}
       {units.map((u, ui) => {
+        // The pending decision anchors under the latest activity-bearing unit.
+        const trailingCard = ui === lastActivityUnitIdx ? actionCard : null;
+        if (u.kind === 'question') return <UltronAskedQuestion key={`q${ui}`} text={u.text} />;
         if (u.kind === 'msg') return <UltronOutboundMessages key={`m${ui}`} messages={[u.text]} />;
         if (u.kind === 'acts') {
-          const card = renderActivity(u.gi, false);
-          // Ultron's read on the case — the situation + plan it shaped — sits right
-          // after the reasoning group and persists through the case's lifecycle.
-          return planNode && u.gi === planAnchorIdx
-            ? <Fragment key={`g${ui}`}>{card}{planNode}</Fragment>
-            : <Fragment key={`a${ui}`}>{card}</Fragment>;
+          // When this group carries the trailing decision card, lift its feedback
+          // row below the card so the thumbs/rerun close out the whole turn (the
+          // reasoning + the ask) rather than splitting the two.
+          const actsMilestones = (groups[u.gi] as { milestones: ActivityMilestone[] }).milestones;
+          const card = renderActivity(u.gi, false, !!trailingCard);
+          return (
+            <Fragment key={`a${ui}`}>
+              {card}
+              {trailingCard}
+              {trailingCard && <SessionActions time={synthClock(actsMilestones)} />}
+            </Fragment>
+          );
         }
         // A response unit — the whole set: the work activity group, Ultron's reply
         // text, the feedback action buttons, and the trailing agent mark.
@@ -825,17 +848,25 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
         // the single mark sits at the foot of the last group.
         const isThreadTail = isLast && chat.length === 0 && !replying;
         return (
-          <UltronResponse
-            key={`resp${ui}`}
-            activity={hasWork ? renderActivity(u.gi, true) : undefined}
-            text={u.text}
-            feedbackTime={synthClock(workMilestones)}
-            // While the work group still rides its own in-trail mark, suppress the
-            // set's mark; once it settles, the tail set's mark provides the presence
-            // — active while the case is still executing/monitoring.
-            active={footActive && isThreadTail && !streamingGroup}
-            showMark={isThreadTail && !streamingGroup}
-          />
+          <Fragment key={`resp${ui}`}>
+            <UltronResponse
+              activity={hasWork ? renderActivity(u.gi, true) : undefined}
+              text={u.text}
+              // When this set carries the trailing decision card, its feedback row
+              // lifts below the card (rendered after it) so the thumbs/rerun close
+              // out the whole turn rather than sitting above the next ask.
+              feedbackTime={trailingCard ? undefined : synthClock(workMilestones)}
+              // While the work group still rides its own in-trail mark, suppress the
+              // set's mark; once it settles, the tail set's mark provides the presence
+              // — active while the case is still executing/monitoring. When this set
+              // carries the trailing decision card, its mark stands down so the single
+              // foot mark sits below the card (after the last Ultron output).
+              active={footActive && isThreadTail && !streamingGroup && !trailingCard}
+              showMark={isThreadTail && !streamingGroup && !trailingCard}
+            />
+            {trailingCard}
+            {trailingCard && <SessionActions time={synthClock(workMilestones)} />}
+          </Fragment>
         );
       })}
       {/* The free-text conversation at the foot — the operator's typed messages as
@@ -848,6 +879,8 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
           <AgentMark mark="circle" size={28} tone="auto" state={footActive ? 'active' : 'idle'} coreHalo={false} aria-hidden="true" />
         </ChatFootMark>
       )}
+      {/* Fallback: if there's no activity trail to anchor under, the card trails. */}
+      {lastActivityUnitIdx < 0 && actionCard}
     </>
   );
 }
@@ -875,14 +908,9 @@ function UltronResponse({ activity, text, feedbackTime, active = false, showMark
   return (
     <ResponseSet>
       {activity}
-      {text != null && (
-        <InboundRow>
-          <InboundBubble><InboundText>{text}</InboundText></InboundBubble>
-        </InboundRow>
-      )}
-      {/* Action button group — thumbs up/down + rerun, lifted below the reply so
-          the set reads activity → message → actions → mark. */}
-      {text != null && feedbackTime && <SessionActions time={feedbackTime} />}
+      {/* Reply prose is no longer shown — the activity trail + action buttons carry
+          the response. The feedback group (thumbs up/down + rerun) trails the set. */}
+      {feedbackTime && <SessionActions time={feedbackTime} />}
       {/* Agent mark — trails the set so the response carries its own presence
           rather than borrowing a single thread-level foot mark. */}
       {showMark && (
@@ -1006,6 +1034,14 @@ export function UltronChatThread({ messages, replying = false }: { messages: Cha
       {replying && <UltronResponse active />}
     </ChatList>
   );
+}
+
+// The answered prompt, collapsed to its question text. Once the operator responds,
+// the interactive card (plan steps + CTAs) gives way to just the question Ultron
+// asked — left in the thread, above the operator's reply, so the resolved
+// conversation keeps the context of what was being decided.
+function UltronAskedQuestion({ text }: { text: string }) {
+  return <AskedQuestion>{text}</AskedQuestion>;
 }
 
 // Outbound messages — the operator's replies in the thread. Each label the user
@@ -1365,29 +1401,29 @@ const TaskList = styled.div`
   flex-direction: column;
 `;
 
-const TaskRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--color-border-opaque);
+/* The header's fixed line height — the click row a collapsed step occupies, and
+   the box the leading dot centers against (so the dot stays put when the row
+   expands to reveal its description). */
+const TASK_HEAD_H = 'var(--space-8)';
 
-  &:last-child {
-    border-bottom: none;
-  }
+const TaskRow = styled.div`
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-3);
 `;
 
 /* Leading timeline rail — a fixed column carrying the step's dot, with a vertical
-   line running the full row height (centered on the dot). Consecutive rows abut
-   (no list gap), so the lines join into one continuous thread; the first row
-   starts the line at its dot and the last row ends it there. */
+   line running the full row height. The dot sits at the header's vertical centre
+   (not the row's), so it stays anchored to the label when the row expands.
+   Consecutive rows abut (no list gap), so the lines join into one continuous
+   thread; the first row starts the line at its dot and the last row ends it. */
 const TaskRail = styled.div`
   position: relative;
   flex-shrink: 0;
-  align-self: stretch;
   width: var(--space-5);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
 
   &::before {
@@ -1400,33 +1436,59 @@ const TaskRail = styled.div`
     width: 1.5px;
     background: var(--color-border-opaque);
   }
-  &[data-first]::before { top: 50%; }
-  &[data-last]::before { bottom: 50%; }
+  /* Clip the thread to the dot's centre (half the header height) at the ends. */
+  &[data-first]::before { top: calc(${TASK_HEAD_H} / 2); }
+  &[data-last]::before { bottom: calc(100% - ${TASK_HEAD_H} / 2); }
+  &[data-first][data-last]::before { display: none; }
 `;
 
-/* The step dot — sits above the line, ringed in the card surface so the line
-   reads as connecting to it rather than passing through. */
+/* The step dot — an outlined ring sitting above the line: filled with the card
+   surface (so the line doesn't show through its center) with a tertiary outline,
+   and ringed in the surface so the line stops a little short of it. Nudged down to
+   sit at the header line's centre. */
 const TaskDot = styled.span`
   position: relative;
   z-index: 1;
+  box-sizing: border-box;
+  margin-top: calc((${TASK_HEAD_H} - var(--space-2)) / 2);
   width: var(--space-2);
   height: var(--space-2);
   border-radius: var(--radius-full);
-  background: var(--color-content-tertiary);
-  box-shadow: 0 0 0 3px var(--color-bg-primary);
+  background: var(--color-bg-primary);
+  border: 1.5px solid var(--color-content-tertiary);
+  box-shadow: 0 0 0 var(--space-2) var(--color-bg-primary);
 `;
 
-/* The task's text column — title above its optional secondary line, taking the
-   row's flexible width before the trailing slot. */
-const TaskText = styled.div`
+/* The task's flexible column — the (clickable) header line, then its optional
+   description below when expanded. */
+const TaskBody = styled.div`
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+`;
+
+/* The collapsed step row — label + trailing chevron — doubling as the toggle. */
+const TaskHeader = styled.div<{ $interactive?: boolean }>`
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: ${TASK_HEAD_H};
+  cursor: ${p => (p.$interactive ? 'pointer' : 'default')};
+
+  &:focus-visible {
+    box-shadow: 0 0 0 2px var(--color-border-focus);
+    border-radius: var(--radius-sm);
+  }
 `;
 
 const TaskLabel = styled.span`
+  flex: 1;
+  min-width: 0;
+  text-align: left;
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   font-weight: var(--font-weight-medium);
@@ -1434,53 +1496,32 @@ const TaskLabel = styled.span`
   color: var(--color-content-primary);
 `;
 
-/* Secondary line under a task — what the step does, muted. */
-const TaskDetail = styled.span`
+/* Trailing disclosure chevron — points right when collapsed, rotates down open. */
+const TaskChevron = styled.span`
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--color-content-tertiary);
+  transition: transform var(--duration-base) var(--ease-out);
+
+  &[data-open] { transform: rotate(90deg); }
+
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+`;
+
+/* Secondary line under a step — what it does, muted and clamped to two lines so a
+   long description never blows out the row height. */
+const TaskDetail = styled.p`
+  margin: 0;
+  padding-bottom: var(--space-2);
   font-family: var(--font-sans);
   font-size: var(--text-xs);
   font-weight: var(--font-weight-regular);
   line-height: var(--line-height-normal);
   color: var(--color-content-disabled);
-`;
-
-/* Trailing slot — the candidate avatar stack, right-aligned. */
-const TaskTrailing = styled.div`
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-shrink: 0;
-`;
-
-/* Overlapping avatar group — each avatar tucks under the previous one, ringed in
-   the card surface so the overlap reads as a stack. */
-const Stack = styled.div`
-  display: flex;
-  align-items: center;
-`;
-
-const StackItem = styled.span`
-  display: inline-flex;
-  border-radius: var(--radius-full);
-  box-shadow: 0 0 0 2px var(--color-bg-primary);
-
-  &:not(:first-child) { margin-left: calc(var(--space-2) * -1); }
-`;
-
-/* "+N" overflow chip — same diameter as an xs avatar, tucked under the stack. */
-const StackOverflow = styled.span`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--space-6);
-  height: var(--space-6);
-  margin-left: calc(var(--space-2) * -1);
-  border-radius: var(--radius-full);
-  background: var(--color-bg-tertiary);
-  box-shadow: 0 0 0 2px var(--color-bg-primary);
-  font-family: var(--font-sans);
-  font-size: var(--text-2xs, 10px);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-content-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 `;
 
 const Prompt = styled.p`
@@ -1528,6 +1569,24 @@ const OtherPill = styled(Button)`
   color: var(--color-content-secondary);
   padding-left: var(--space-3);
   padding-right: var(--space-3);
+`;
+
+/* The answered prompt's residual question text — left-aligned (Ultron's voice) as
+   an outlined pill, muted to read as resolved context rather than a live ask. Same
+   text size as the operator's outbound bubble, so the asked/answered pair matches. */
+const AskedQuestion = styled.p`
+  width: fit-content;
+  max-width: 80%;
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border-opaque);
+  border-radius: var(--radius-full);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-relaxed);
+  letter-spacing: var(--tracking-normal);
+  color: var(--color-content-secondary);
 `;
 
 /* Outbound (sent) messages — right-aligned chat bubbles, stacked below the

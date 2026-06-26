@@ -11,8 +11,7 @@ import {
   Button, CheckIcon, ChevronRightIcon,
   AIMessageActions, ThumbsUpIcon, ThumbsDownIcon, RefreshCw04Icon,
 } from 'alloy-design-system';
-import type { ActivityMilestone, RecordRef, ActivityUsage as ActivityUsageData } from './fixtures';
-import { aggregateUsage } from './fixtures';
+import type { ActivityMilestone, RecordRef } from './fixtures';
 import { AgentMark } from './AgentMark';
 import { RecordCard } from './RecordCard';
 
@@ -190,13 +189,10 @@ function ActivitySession({ milestones, typingIndex, workingIndex, settled, hideA
               <MilestoneContent
                 milestone={m}
                 last
-                collapsible={false}
+                /* Each step is its own accordion — collapsed to its headline, with
+                   a chevron that reveals the step's supplemental line. */
+                collapsible
                 typing={i === typingIndex}
-                /* Combined usage for the whole group, shown once under its last
-                   activity — the full set of tools/skills/data Ultron drew on.
-                   Held back until the group finishes (no live mark riding it), so
-                   it appears only after the last activity is done. */
-                usage={i === milestones.length - 1 && (workingIndex == null || settled) ? aggregateUsage(milestones.map(m => m.icon)) : undefined}
                 icon={
                   <MilestoneIcon
                     icon={m.icon}
@@ -204,6 +200,8 @@ function ActivitySession({ milestones, typingIndex, workingIndex, settled, hideA
                     /* The icon the mark is currently riding hides behind it so it
                        reappears (as the completed step's icon) once the mark glides on. */
                     hidden={showMark && !settled && i === activeRow}
+                    /* The step Ultron is mid-thought on spins; settled steps check. */
+                    loading={typingIndex === i}
                   />
                 }
               />
@@ -342,30 +340,36 @@ function BlockRecords({ records, initial = 3 }: { records: RecordRef[]; initial?
   );
 }
 
-function MilestoneIcon({ slotRef, hidden }: {
+function MilestoneIcon({ slotRef, hidden, loading }: {
   icon: ActivityMilestone['icon'];
   slotRef?: (el: HTMLElement | null) => void;
   hidden?: boolean;
+  loading?: boolean;
 }) {
-  // Settled activities read as completed steps — a success checkmark on the icon
-  // rail. The live agent mark is no longer drawn here — it floats over the column
-  // (see ActivitySession). `slotRef` lets that mark measure this icon's position
-  // so it can glide onto it; `hidden` keeps the icon's layout while the mark
-  // covers it, so geometry stays measurable (the check reappears once it glides on).
-  return <IconBadge ref={slotRef} aria-hidden="true" $hidden={hidden}><CheckIcon size={16} /></IconBadge>;
+  // A step in progress shows a spinner; once it completes it settles to the
+  // success checkmark. `slotRef` lets the resting agent mark measure this icon's
+  // position; `hidden` keeps the icon's layout while that mark covers it, so
+  // geometry stays measurable (the check reappears once it glides on).
+  return (
+    <IconBadge ref={slotRef} aria-hidden="true" $hidden={hidden} $loading={loading}>
+      {loading ? <Spinner /> : <CheckIcon size={16} />}
+    </IconBadge>
+  );
 }
 
 /** A milestone's headline + (collapsible) detail blocks. Shared by the inline
  *  trail row and the standalone step card. While `typing`, the headline pulses
  *  (a live "thinking" blink) and the secondary text types out beneath it —
  *  Ultron mid-thought. */
-function MilestoneContent({ milestone, last, typing, icon, collapsible = true, usage }: { milestone: ActivityMilestone; last?: boolean; typing?: boolean; icon?: ReactNode; collapsible?: boolean; usage?: ActivityUsageData }) {
+function MilestoneContent({ milestone, last, typing, icon, collapsible = true }: { milestone: ActivityMilestone; last?: boolean; typing?: boolean; icon?: ReactNode; collapsible?: boolean }) {
   const hasBlocks = !!milestone.blocks?.length;
-  const [open, setOpen] = useState(true);
+  // Collapsible steps start collapsed (an accordion the operator opens to reveal
+  // the supplemental line); always-on steps stay expanded.
+  const [open, setOpen] = useState(!collapsible);
 
-  // Inside a session the activity is never individually collapsible: it shows its
-  // full sub-context with no chevron (the session toggles as a unit). The
-  // connected trail keeps the per-row toggle. While typing, the toggle is inert.
+  // A collapsible step toggles its own supplemental sub-context via a trailing
+  // chevron (the prompt-card step accordion). While typing it's inert — the
+  // chevron only appears once the step has settled.
   const interactive = collapsible && hasBlocks && !typing;
   // Blocks reveal immediately (even while typing) so the secondary text can type
   // out in place rather than popping in after the headline.
@@ -414,62 +418,7 @@ function MilestoneContent({ milestone, last, typing, icon, collapsible = true, u
         </Blocks>
       )}
 
-      {/* Card/session layout (icon mode): a toggle that reveals the tools, skills,
-          and data the group drew on. Shown only under the last activity in a
-          group (where `usage` is passed), and only once the headline finishes
-          typing so it doesn't pop in mid-thought. */}
-      {icon && !typing && usage && <ActivityUsage usage={usage} />}
     </Content>
-  );
-}
-
-/** A 24px tertiary toggle that shows/hides the tools, skills, and data a group
- *  of activities drew on (the combined, deduped set). Collapsed by default. */
-function ActivityUsage({ usage }: { usage: ActivityUsageData }) {
-  const [open, setOpen] = useState(false);
-  // Label is a verb-led summary of what the activity drew on — "ran N skills,
-  // read N data, used N tools" — with empty categories omitted.
-  const plural = (n: number, s: string) => `${n} ${n === 1 ? s : s + 's'}`;
-  const label = [
-    usage.skills.length ? `ran ${plural(usage.skills.length, 'skill')}` : null,
-    usage.data.length ? `read ${usage.data.length} data` : null,
-    usage.tools.length ? `used ${plural(usage.tools.length, 'tool')}` : null,
-  ].filter(Boolean).join(', ');
-  if (!label) return null;
-  // Capitalize the leading verb (the first segment, whichever it is).
-  const labelText = label.charAt(0).toUpperCase() + label.slice(1);
-  return (
-    <Usage>
-      <UsageToggle
-        type="button"
-        variant="tertiary"
-        size="xs"
-        aria-expanded={open}
-        trailingArtwork={<UsageChevron data-open={open || undefined}><ChevronRightIcon size={12} /></UsageChevron>}
-        onClick={() => setOpen(o => !o)}
-      >
-        {labelText}
-      </UsageToggle>
-      {open && (
-        <UsagePanel>
-          <UsageGroup label="Tools" items={usage.tools} />
-          <UsageGroup label="Skills" items={usage.skills} />
-          <UsageGroup label="Data" items={usage.data} />
-        </UsagePanel>
-      )}
-    </Usage>
-  );
-}
-
-function UsageGroup({ label, items }: { label: string; items: string[] }) {
-  if (!items.length) return null;
-  return (
-    <UsageRow>
-      <UsageLabel>{label}</UsageLabel>
-      <UsageChips>
-        {items.map((t, i) => <Chip key={i}>{t}</Chip>)}
-      </UsageChips>
-    </UsageRow>
   );
 }
 
@@ -555,7 +504,7 @@ const SessionBody = styled.div<{ $reserve?: boolean }>`
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
   padding-top: var(--space-3);
   /* space-8 (mark) + space-2 (rest gap), via the same calc the mark box uses. */
   padding-bottom: ${p => (p.$reserve ? 'calc(var(--space-8) + var(--space-2) + var(--space-1))' : '0')};
@@ -580,7 +529,7 @@ const SessionConnector = styled.span`
   /* Centered on the 32px icon column. */
   left: calc(var(--space-8) / 2);
   top: calc(var(--space-8) + var(--space-1));
-  bottom: calc(var(--space-1) - var(--space-3));
+  bottom: calc(var(--space-1) - var(--space-2));
   width: 0;
   border-left: 1.5px dashed var(--color-border-opaque);
   pointer-events: none;
@@ -707,7 +656,7 @@ const IconCol = styled.div`
    a badge-sized icon column that lines up under the header avatar. `$hidden`
    keeps the slot's layout (so the floating mark can still measure it) while the
    mark visually stands in for it. */
-const IconBadge = styled.span<{ $hidden?: boolean }>`
+const IconBadge = styled.span<{ $hidden?: boolean; $loading?: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -716,6 +665,24 @@ const IconBadge = styled.span<{ $hidden?: boolean }>`
   height: var(--space-8);
   color: var(--color-success-content);
   visibility: ${p => (p.$hidden ? 'hidden' : 'visible')};
+`;
+
+/* In-progress step indicator — a spinning ring that reads as "working", in the
+   neutral divider stroke so it sits quietly until the step settles to a check. */
+const spin = keyframes`
+  to { transform: rotate(360deg); }
+`;
+
+const Spinner = styled.span`
+  box-sizing: border-box;
+  width: var(--space-4);
+  height: var(--space-4);
+  border-radius: var(--radius-full);
+  border: 1.75px solid var(--color-border-opaque);
+  border-top-color: var(--color-content-tertiary);
+  animation: ${spin} 0.7s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) { animation: none; }
 `;
 
 /* Dashed vertical line connecting one milestone's icon to the next. Multiply
@@ -758,6 +725,9 @@ const labelBlink = keyframes`
 `;
 
 const Headline = styled.span<{ $blink?: boolean }>`
+  flex: 1;
+  min-width: 0;
+  text-align: left;
   font-size: var(--text-sm); /* 14px */
   font-weight: var(--font-weight-medium);
   color: var(--color-content-primary);
@@ -799,72 +769,6 @@ const Block = styled.div`
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-`;
-
-/* Per-activity usage disclosure — sits under the activity's sub-context, hung
-   under the headline (clears the inline icon column like Blocks). */
-const Usage = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding-top: var(--space-3);
-  padding-left: calc(var(--space-8) + var(--space-3));
-`;
-
-/* The 24px tertiary toggle. Its left edge lines up with the headline label and
-   sub-context text above it (no negative inset). */
-const UsageToggle = styled(Button)`
-  align-self: flex-start;
-  /* The usage summary is the faintest text on the card — one step lighter than
-     the tertiary captions around it. */
-  color: var(--color-content-disabled);
-`;
-
-/* Trailing chevron — points right, rotates down when the panel is open. */
-const UsageChevron = styled.span`
-  display: inline-flex;
-  transition: transform var(--duration-base) var(--ease-default);
-  &[data-open] { transform: rotate(90deg); }
-`;
-
-const UsagePanel = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  animation: ${blocksIn} var(--duration-base) var(--ease-out);
-
-  @media (prefers-reduced-motion: reduce) { animation: none; }
-`;
-
-const UsageRow = styled.div`
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-`;
-
-const UsageLabel = styled.span`
-  flex-shrink: 0;
-  width: var(--space-10);
-  font-size: var(--text-xs);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-content-secondary);
-`;
-
-const UsageChips = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-`;
-
-const Chip = styled.span`
-  display: inline-flex;
-  align-items: center;
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-full);
-  background: var(--color-bg-tertiary);
-  font-size: var(--text-xs);
-  line-height: var(--line-height-snug);
-  color: var(--color-content-secondary);
 `;
 
 const BlockText = styled.p`

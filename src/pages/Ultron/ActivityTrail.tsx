@@ -5,13 +5,24 @@
    list / labeled check list).
    ───────────────────────────────────────────────────────────────────────────── */
 
-import { useState, useEffect, useRef, useLayoutEffect, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect, type ReactNode, type ComponentType } from 'react';
+import { createPortal } from 'react-dom';
 import styled, { keyframes } from 'styled-components';
 import {
-  Button, CheckIcon, ChevronRightIcon,
+  Avatar, Button, ChevronRightIcon, XCloseIcon,
   AIMessageActions, ThumbsUpIcon, ThumbsDownIcon, RefreshCw04Icon,
+  Tool01Icon, ZapIcon, Grid01Icon,
 } from 'alloy-design-system';
-import type { ActivityMilestone, RecordRef } from './fixtures';
+import type { ActivityMilestone, RecordRef, ActivityUsage, UsageEntry } from './fixtures';
+import { avatarUrl, aggregateUsage } from './fixtures';
+
+/** The Run-details drawer's three kinds, each with its section icon. */
+type UsageIcon = ComponentType<{ size?: number }>;
+const USAGE_SECTIONS: { key: keyof ActivityUsage; label: string; Icon: UsageIcon }[] = [
+  { key: 'tools', label: 'Tools', Icon: Tool01Icon },
+  { key: 'skills', label: 'Skills', Icon: ZapIcon },
+  { key: 'data', label: 'Data', Icon: Grid01Icon },
+];
 import { AgentMark } from './AgentMark';
 import { RecordCard } from './RecordCard';
 
@@ -193,6 +204,13 @@ function ActivitySession({ milestones, typingIndex, workingIndex, settled, hideA
                    a chevron that reveals the step's supplemental line. */
                 collapsible
                 typing={i === typingIndex}
+                /* The run's "tools used" trigger lives under the LAST activity's
+                   expanded content — revealed only when the operator opens that
+                   step — once the group has settled. Its toolkit is derived from
+                   the group's own activities, so it fits the work that was done. */
+                extra={i === milestones.length - 1 && (workingIndex == null || settled)
+                  ? <UsageSummary usage={aggregateUsage(milestones.map(m => m.icon))} />
+                  : undefined}
                 icon={
                   <MilestoneIcon
                     icon={m.icon}
@@ -310,6 +328,95 @@ export function SessionActions({ time }: { time: string }) {
   );
 }
 
+/** A trigger summarising what a group's activities drew on — "{N} tools used" —
+ *  that opens the Run details drawer on the right. The toolkit is derived from
+ *  the group's own activities (their kinds), so each group surfaces the tools,
+ *  skills, and data sources that actually applied to its work rather than a fixed
+ *  canned set. */
+function UsageSummary({ usage }: { usage: ActivityUsage }) {
+  const [open, setOpen] = useState(false);
+
+  // Close the drawer on Escape while it's open.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  // The drawer breaks the toolkit into its three kinds; the trigger counts tools
+  // (the headline measure), the same number the Tools section shows.
+  const sections = USAGE_SECTIONS
+    .map(s => ({ ...s, items: usage[s.key] }))
+    .filter(s => s.items.length);
+
+  if (!usage.tools.length) return null;
+  return (
+    <UsageWrap>
+      <Button
+        variant="tertiary"
+        size="xs"
+        trailingArtwork={<ChevronRightIcon size={12} />}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen(true)}
+      >
+        {usage.tools.length} {usage.tools.length === 1 ? 'tool' : 'tools'} used
+      </Button>
+      {open && createPortal(
+        <UsageOverlay role="dialog" aria-modal="true" aria-label="Run details">
+          <UsageScrim onClick={() => setOpen(false)} />
+          <UsageDrawer>
+            <UsageDrawerHeader>
+              <UsageDrawerHeadings>
+                <UsageDrawerTitle>Run details</UsageDrawerTitle>
+                <UsageDrawerSubtitle>What this activity drew on — tap any for details</UsageDrawerSubtitle>
+              </UsageDrawerHeadings>
+              <UsageClose type="button" aria-label="Close" onClick={() => setOpen(false)}>
+                <XCloseIcon size={18} />
+              </UsageClose>
+            </UsageDrawerHeader>
+            <UsageDrawerBody>
+              {sections.map(s => (
+                <UsageSection key={s.label}>
+                  <ToolsSectionLabel>{s.label} · {s.items.length}</ToolsSectionLabel>
+                  <ToolList>
+                    {s.items.map((it, i) => <UsageRow key={it.name} entry={it} Icon={s.Icon} first={i === 0} />)}
+                  </ToolList>
+                </UsageSection>
+              ))}
+            </UsageDrawerBody>
+          </UsageDrawer>
+        </UsageOverlay>,
+        document.body,
+      )}
+    </UsageWrap>
+  );
+}
+
+/** One tool / skill / data row in the Run details drawer — a compact single line
+ *  (icon + name) that expands to reveal what it did, the query it ran (tools
+ *  only), and a plain-language summary of what it returned. */
+function UsageRow({ entry, Icon, first }: { entry: UsageEntry; Icon: UsageIcon; first: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <ToolRow data-first={first || undefined}>
+      <ToolHeader type="button" aria-expanded={open} onClick={() => setOpen(o => !o)}>
+        <ToolTile aria-hidden="true"><Icon size={16} /></ToolTile>
+        <ToolName>{entry.name}</ToolName>
+        <ToolChevron data-open={open || undefined} aria-hidden="true"><ChevronRightIcon size={16} /></ToolChevron>
+      </ToolHeader>
+      {open && (
+        <ToolDetail>
+          <ToolDesc>{entry.description}</ToolDesc>
+          {entry.query && <ToolQuery>{entry.query}</ToolQuery>}
+          <ToolSummary>{entry.summary}</ToolSummary>
+        </ToolDetail>
+      )}
+    </ToolRow>
+  );
+}
+
 function MilestoneRow({ milestone, last }: { milestone: ActivityMilestone; last: boolean }) {
   return (
     <Row>
@@ -346,13 +453,17 @@ function MilestoneIcon({ slotRef, hidden, loading }: {
   hidden?: boolean;
   loading?: boolean;
 }) {
-  // A step in progress shows a spinner; once it completes it settles to the
-  // success checkmark. `slotRef` lets the resting agent mark measure this icon's
-  // position; `hidden` keeps the icon's layout while that mark covers it, so
-  // geometry stays measurable (the check reappears once it glides on).
+  // A step in progress shows a spinning ring; once it completes the ring closes
+  // into a full circle and the checkmark draws on — one continuous SVG so the
+  // loader morphs into the check instead of hard-swapping. `slotRef` lets the
+  // resting agent mark measure this icon's position; `hidden` keeps the icon's
+  // layout while that mark covers it, so geometry stays measurable.
   return (
     <IconBadge ref={slotRef} aria-hidden="true" $hidden={hidden} $loading={loading}>
-      {loading ? <Spinner /> : <CheckIcon size={16} />}
+      <StatusMark viewBox="0 0 24 24" $loading={loading}>
+        <circle className="ring" cx="12" cy="12" r="9" />
+        <path className="check" d="M7.5 12.4l3 3 6-6.4" />
+      </StatusMark>
     </IconBadge>
   );
 }
@@ -361,19 +472,31 @@ function MilestoneIcon({ slotRef, hidden, loading }: {
  *  trail row and the standalone step card. While `typing`, the headline pulses
  *  (a live "thinking" blink) and the secondary text types out beneath it —
  *  Ultron mid-thought. */
-function MilestoneContent({ milestone, last, typing, icon, collapsible = true }: { milestone: ActivityMilestone; last?: boolean; typing?: boolean; icon?: ReactNode; collapsible?: boolean }) {
+function MilestoneContent({ milestone, last, typing, icon, collapsible = true, extra }: { milestone: ActivityMilestone; last?: boolean; typing?: boolean; icon?: ReactNode; collapsible?: boolean; extra?: ReactNode }) {
   const hasBlocks = !!milestone.blocks?.length;
+  // Extra content hung under this step (the group's "tools used" trigger).
+  const hasExtra = !!extra;
+  // Executed work steps always render an outcome line (their `progress`), so they
+  // read as open even when collapsed — the usage trigger should sit inline with it
+  // rather than hide behind an expand the operator has no reason to click.
+  const hasProgress = !!milestone.progress?.length;
   // Collapsible steps start collapsed (an accordion the operator opens to reveal
   // the supplemental line); always-on steps stay expanded.
   const [open, setOpen] = useState(!collapsible);
 
   // A collapsible step toggles its own supplemental sub-context via a trailing
   // chevron (the prompt-card step accordion). While typing it's inert — the
-  // chevron only appears once the step has settled.
-  const interactive = collapsible && hasBlocks && !typing;
+  // chevron only appears once the step has settled. It's expandable when it has
+  // hidden content to reveal: detail blocks, or — for steps with no always-visible
+  // progress line — the usage trigger itself.
+  const interactive = collapsible && !typing && (hasBlocks || (hasExtra && !hasProgress));
   // Blocks reveal immediately (even while typing) so the secondary text can type
   // out in place rather than popping in after the headline.
   const showBlocks = hasBlocks && (collapsible ? open : true);
+  // The usage trigger shows whenever the step's supplemental content is on screen:
+  // inline for steps that always show a progress/outcome line, or on expand for
+  // collapse-only (reasoning) steps.
+  const showExtra = hasExtra && (collapsible ? (open || hasProgress) : true);
 
   return (
     <Content $last={last}>
@@ -393,6 +516,15 @@ function MilestoneContent({ milestone, last, typing, icon, collapsible = true }:
           <Chevron data-open={open || undefined} aria-hidden="true"><ChevronRightIcon size={14} /></Chevron>
         )}
       </Header>
+
+      {/* Running progress sub-row — a live status line that cycles through the
+          step's progress beats (each pops in as it replaces the last) while the
+          step is working, then settles to the final result in the success tone. */}
+      {milestone.progress?.length ? (
+        <ProgressWrap $indent={!!icon}>
+          <MilestoneProgress steps={milestone.progress} avatars={milestone.avatars} live={!!typing} />
+        </ProgressWrap>
+      ) : null}
 
       {showBlocks && (
         <Blocks $indent={!!icon}>
@@ -418,7 +550,72 @@ function MilestoneContent({ milestone, last, typing, icon, collapsible = true }:
         </Blocks>
       )}
 
+      {showExtra && <ExtraSlot $indent={!!icon}>{extra}</ExtraSlot>}
     </Content>
+  );
+}
+
+/** How long each running progress beat holds before the next replaces it. Sized
+ *  so a short count-up sequence ticks through roughly within a step's reveal
+ *  cadence (ACTIVITY_STEP_MS) before it settles to the result. */
+const PROGRESS_BEAT_MS = 620;
+
+/** A step's running-progress line. While `live`, it advances through the beats —
+ *  each new beat re-mounts (via key) so it pops in, replacing the previous one —
+ *  and holds on the last (the settled result). Once not live, it shows the final
+ *  result straight away. The terminal beat reads in the success tone (done),
+ *  earlier beats in a muted "still working" tone. The matched-user avatars (when
+ *  present) ride the trailing end of the row once the step settles. */
+function MilestoneProgress({ steps, avatars, live }: { steps: string[]; avatars?: string[]; live?: boolean }) {
+  const last = steps.length - 1;
+  const [i, setI] = useState(live ? 0 : last);
+
+  // Once the step goes live it plays through EVERY beat in order — so the status
+  // ticks up ("Reaching out to …" → "Reached N/20 …" → the settled result) and
+  // keeps advancing even after the headline stops typing, rather than snapping
+  // straight to the end. A step that mounts already settled (a historical /
+  // resolved trail that was never live) shows the final result at once.
+  const started = useRef(live);
+  useEffect(() => {
+    if (live && !started.current) { started.current = true; setI(0); }
+  }, [live]);
+
+  useEffect(() => {
+    if (!started.current || i >= last) return;
+    const t = setTimeout(() => setI(n => Math.min(n + 1, last)), PROGRESS_BEAT_MS);
+    return () => clearTimeout(t);
+  }, [i, last]);
+
+  const done = i >= last;
+  return (
+    <ProgressRow>
+      <ProgressLine key={i} $done={done} aria-live="polite">
+        {steps[i]}
+      </ProgressLine>
+      {done && avatars?.length ? <AvatarStack seeds={avatars} /> : null}
+    </ProgressRow>
+  );
+}
+
+/** How long between each avatar popping in, so the cluster fills left to right. */
+const AVATAR_STAGGER_MS = 90;
+
+/** A compact overlapping cluster of the people a step reached. Shows up to five
+ *  faces (leading face stacked on top); any beyond that collapse into a trailing
+ *  "+N" count chip. The faces reveal one-by-one, left to right, each popping in a
+ *  beat after the last so the group fills in as a flow. */
+function AvatarStack({ seeds, max = 5 }: { seeds: string[]; max?: number }) {
+  const shown = seeds.slice(0, max);
+  const extra = seeds.length - shown.length;
+  return (
+    <StackRow aria-label={`${seeds.length} people reached`}>
+      {shown.map((seed, i) => (
+        <StackItem key={seed} style={{ zIndex: shown.length - i, animationDelay: `${i * AVATAR_STAGGER_MS}ms` }}>
+          <Avatar size="sm" src={avatarUrl(seed)} name={seed} alt="" />
+        </StackItem>
+      ))}
+      {extra > 0 && <StackMore aria-hidden="true" style={{ animationDelay: `${shown.length * AVATAR_STAGGER_MS}ms` }}>+{extra}</StackMore>}
+    </StackRow>
   );
 }
 
@@ -504,7 +701,7 @@ const SessionBody = styled.div<{ $reserve?: boolean }>`
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
   padding-top: var(--space-3);
   /* space-8 (mark) + space-2 (rest gap), via the same calc the mark box uses. */
   padding-bottom: ${p => (p.$reserve ? 'calc(var(--space-8) + var(--space-2) + var(--space-1))' : '0')};
@@ -581,6 +778,242 @@ const ActionsRow = styled.div`
     height: 32px;
     padding: 0;
   }
+`;
+
+/* Usage summary — a quiet trigger sitting under a group's last activity that
+   opens the run detail in a right-side drawer. */
+const UsageWrap = styled.div`
+  display: flex;
+`;
+
+/* Holds the group's "tools used" trigger beneath its last activity, indented past
+   the inline icon column so it lines up under the step headlines. */
+const ExtraSlot = styled.div<{ $indent?: boolean }>`
+  padding-top: var(--space-2);
+  padding-left: ${p => (p.$indent ? 'calc(var(--space-8) + var(--space-3))' : '0')};
+`;
+
+/* ── Usage drawer ──────────────────────────────────────────────────────────── */
+
+/* Full-viewport overlay that anchors the drawer to the right edge. */
+const usageScrimIn = keyframes`
+  from { opacity: 0; }
+  to   { opacity: 1; }
+`;
+const usageDrawerIn = keyframes`
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+`;
+
+const UsageOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+`;
+
+const UsageScrim = styled.div`
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.45);
+  animation: ${usageScrimIn} 200ms var(--ease-out);
+`;
+
+/* The panel itself — slides in from the right, a left-projecting shadow lifts it
+   above the page. */
+const UsageDrawer = styled.div`
+  position: relative;
+  width: min(360px, 86vw);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-primary);
+  box-shadow: -12px 0 32px rgba(2, 6, 23, 0.18);
+  animation: ${usageDrawerIn} 260ms var(--ease-out);
+
+  @media (prefers-reduced-motion: reduce) { animation: none; }
+`;
+
+const UsageDrawerHeader = styled.div`
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  height: 48px;
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--color-border-opaque);
+`;
+
+const UsageDrawerHeadings = styled.div`
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+`;
+
+const UsageDrawerTitle = styled.h2`
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  color: var(--color-content-primary);
+`;
+
+/* Alloy paragraph / small — kept to one line so the header holds its 48px. */
+const UsageDrawerSubtitle = styled.span`
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-snug);
+  color: var(--color-content-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const UsageClose = styled.button`
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  border-radius: var(--radius-md);
+  color: var(--color-content-secondary);
+  cursor: pointer;
+
+  &:hover { background: var(--color-bg-secondary); }
+  &:focus-visible { box-shadow: 0 0 0 2px var(--color-border-focus); }
+`;
+
+const UsageDrawerBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-4) var(--space-6);
+  overflow-y: auto;
+`;
+
+/* One kind of usage — Tools / Skills / Data — as a labeled list of rows. */
+const UsageSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+`;
+
+/* Section eyebrow above a list — "TOOLS · N". */
+const ToolsSectionLabel = styled.span`
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-content-tertiary);
+`;
+
+const ToolList = styled.div`
+  display: flex;
+  flex-direction: column;
+`;
+
+/* One tool/skill/data row — a single-line header plus its (collapsible) detail.
+   A hairline divider separates each from the last. */
+const ToolRow = styled.div`
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--color-border-opaque);
+
+  &[data-first] { border-top: none; }
+`;
+
+/* The always-visible line: small icon tile + name + disclosure chevron. */
+const ToolHeader = styled.button`
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) 0;
+  cursor: pointer;
+
+  &:focus-visible { box-shadow: 0 0 0 2px var(--color-border-focus); border-radius: var(--radius-sm); }
+`;
+
+/* Small rounded icon tile keyed to the section's kind. */
+const ToolTile = styled.span`
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-7);
+  height: var(--space-7);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-content-secondary);
+`;
+
+const ToolName = styled.span`
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-snug);
+  color: var(--color-content-primary);
+`;
+
+const ToolDesc = styled.span`
+  /* Alloy paragraph / small */
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-relaxed);
+  letter-spacing: var(--tracking-normal);
+  color: var(--color-content-tertiary);
+`;
+
+/* Disclosure chevron — points right when collapsed, rotates down when open. */
+const ToolChevron = styled.span`
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--color-content-tertiary);
+  transition: transform var(--duration-base) var(--ease-default);
+  &[data-open] { transform: rotate(90deg); }
+`;
+
+/* Expanded detail — hung under the name, clearing the icon tile column. */
+const ToolDetail = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0 0 var(--space-3);
+  padding-left: calc(var(--space-7) + var(--space-2));
+`;
+
+/* The tool's query, in a code block. */
+const ToolQuery = styled.pre`
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: var(--line-height-normal);
+  color: var(--color-content-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+`;
+
+/* Plain-language result summary. */
+const ToolSummary = styled.p`
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--line-height-normal);
+  color: var(--color-content-primary);
 `;
 
 /* A thumbs button that lights up when it's the active rating; otherwise it
@@ -667,22 +1100,58 @@ const IconBadge = styled.span<{ $hidden?: boolean; $loading?: boolean }>`
   visibility: ${p => (p.$hidden ? 'hidden' : 'visible')};
 `;
 
-/* In-progress step indicator — a spinning ring that reads as "working", in the
-   neutral divider stroke so it sits quietly until the step settles to a check. */
+/* In-progress step indicator that resolves to the success check. A single SVG
+   holds both the ring and the checkmark so the loader *morphs* into the check
+   rather than hard-swapping:
+
+   • Loading — the ring shows a ~30% arc (dashoffset) spinning continuously in
+     the neutral divider stroke, reading as "working"; the check is undrawn.
+   • Done — the arc closes to a full circle and the stroke warms to success
+     green (transitioned dashoffset + color), then the checkmark strokes itself
+     on a beat later. The ring keeps its silent spin even when full, so there's
+     no rotation snap at the hand-off; a full circle spinning is invisible.
+
+   Circumference for r=9 is 2·π·9 ≈ 56.5 (the dash unit below). */
 const spin = keyframes`
   to { transform: rotate(360deg); }
 `;
 
-const Spinner = styled.span`
-  box-sizing: border-box;
+const RING_C = 56.5;
+
+const StatusMark = styled.svg<{ $loading?: boolean }>`
   width: var(--space-4);
   height: var(--space-4);
-  border-radius: var(--radius-full);
-  border: 1.75px solid var(--color-border-opaque);
-  border-top-color: var(--color-content-tertiary);
-  animation: ${spin} 0.7s linear infinite;
+  overflow: visible;
 
-  @media (prefers-reduced-motion: reduce) { animation: none; }
+  .ring {
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-dasharray: ${RING_C};
+    transform-origin: center;
+    /* loading: leave ~30% of the circle drawn as the spinner arc */
+    stroke-dashoffset: ${p => (p.$loading ? RING_C * 0.7 : 0)};
+    stroke: ${p => (p.$loading ? 'var(--color-content-tertiary)' : 'var(--color-success-content)')};
+    animation: ${spin} 0.75s linear infinite;
+    transition: stroke-dashoffset 0.4s ease, stroke 0.3s ease;
+  }
+
+  .check {
+    fill: none;
+    stroke: var(--color-success-content);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 15;
+    /* undrawn while loading; draws in just after the ring closes */
+    stroke-dashoffset: ${p => (p.$loading ? 15 : 0)};
+    transition: stroke-dashoffset 0.3s ease 0.25s;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ring { animation: none; }
+    .ring, .check { transition: none; }
+  }
 `;
 
 /* Dashed vertical line connecting one milestone's icon to the next. Multiply
@@ -743,6 +1212,96 @@ const Chevron = styled.span`
   color: var(--color-content-tertiary);
   transition: transform var(--duration-base) var(--ease-default);
   &[data-open] { transform: rotate(90deg); }
+`;
+
+/* Running-progress sub-row — sits directly under the headline. Hangs under the
+   title (clears the inline icon column like Blocks) when the icon rides inline;
+   in the connected trail the row is already offset so no indent is needed. */
+const ProgressWrap = styled.div<{ $indent?: boolean }>`
+  padding-top: var(--space-1);
+  padding-left: ${p => (p.$indent ? 'calc(var(--space-8) + var(--space-3))' : '0')};
+`;
+
+/* Each progress beat pops in as it replaces the last — a quick fade + small
+   upward settle, so a status change reads as a fresh line landing. */
+const progressPop = keyframes`
+  from { opacity: 0; transform: translateY(var(--space-1)); }
+  to   { opacity: 1; transform: translateY(0); }
+`;
+
+/* Holds the status line and the trailing matched-user avatar group on one row —
+   the line takes the lead, the avatars sit flush to the right edge. */
+const ProgressRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+`;
+
+/* The status line itself — Alloy paragraph / medium, in the muted content-tertiary
+   tone for both the in-flight beats and the settled result. */
+const ProgressLine = styled.div<{ $done?: boolean }>`
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-loose);
+  letter-spacing: var(--tracking-normal);
+  color: var(--color-content-tertiary);
+  animation: ${progressPop} var(--duration-base) var(--ease-out);
+
+  @media (prefers-reduced-motion: reduce) { animation: none; }
+`;
+
+/* Trailing overlapping avatar cluster — the matched people the step reached. The
+   faces tuck under one another (negative gap) and each carries a surface-coloured
+   ring so the stack reads cleanly against the trail. The container is static; the
+   faces themselves stagger in (see avatarPop) so the group fills left to right. */
+const StackRow = styled.div`
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+`;
+
+/* Each face pops in from a slightly tucked, scaled-down start — paired with the
+   per-item animation-delay set in the markup, the cluster reveals left to right. */
+const avatarPop = keyframes`
+  from { opacity: 0; transform: translateX(calc(-1 * var(--space-2))) scale(0.6); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+`;
+
+const StackItem = styled.span`
+  display: inline-flex;
+  border-radius: var(--radius-full);
+  /* White ring + overlap, so the faces fan out as one cluster. */
+  box-shadow: 0 0 0 2px var(--color-bg-primary);
+  /* "both" fill holds the from-state through the stagger delay so faces stay
+     hidden until their turn, rather than flashing in then animating. */
+  animation: ${avatarPop} 300ms var(--ease-out) both;
+
+  &:not(:first-child) { margin-left: calc(-1 * var(--space-2)); }
+
+  @media (prefers-reduced-motion: reduce) { animation: none; }
+`;
+
+/* Overflow count chip when more people were reached than faces shown. */
+const StackMore = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--space-6);
+  min-width: var(--space-6);
+  padding: 0 var(--space-1);
+  margin-left: calc(-1 * var(--space-2));
+  border-radius: var(--radius-full);
+  box-shadow: 0 0 0 2px var(--color-bg-primary);
+  background: var(--color-slate-bg-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-content-secondary);
+  animation: ${avatarPop} 300ms var(--ease-out) both;
+
+  @media (prefers-reduced-motion: reduce) { animation: none; }
 `;
 
 /* The sub-context eases in once the headline finishes typing, rather than

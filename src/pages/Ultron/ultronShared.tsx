@@ -175,6 +175,11 @@ export const hasMultipleCtas = (prompt: string): boolean =>
 /** Combined primary label shown when a prompt bundles several actions. */
 export const DO_IT_ALL_LABEL = 'Approve all';
 
+/** The primary affirmative answer on a decision card. Used both as the button's
+ *  label AND as the outbound message recorded when it's tapped, so the sent
+ *  bubble reflects exactly the option the operator chose. */
+export const AFFIRMATIVE_LABEL = 'Yes';
+
 /** Split a bundled prompt/recommendation into its discrete step labels — used to
  *  render plan step cards for cases that have no authored task breakdown (e.g.
  *  detected/spawned cases, whose prompt is their imperative recommendation).

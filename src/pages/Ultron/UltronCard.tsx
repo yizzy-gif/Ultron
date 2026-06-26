@@ -13,7 +13,7 @@ import {
 } from 'alloy-design-system';
 import type { ChatMessage, ThreadItem } from './types';
 import {
-  THREAD_SUBJECTS, threadAvatarUrl, THREAD_PROMPTS, threadDisplayTitle, threadMeta,
+  THREAD_SUBJECTS, threadAvatarUrl, avatarUrl, THREAD_PROMPTS, threadDisplayTitle, threadMeta,
   THREAD_FOLLOWUPS, THREAD_RECORDS, activityForThread, analyzingSteps,
   WORKING_ACTIVITIES, THREAD_TASKS, casePlan, THREAD_FLAGS, actionAck,
 } from './fixtures';
@@ -21,7 +21,7 @@ import type { ActivityMilestone, WorkingMilestone, PlanTask, AnalyzingStep, Even
 import { RecordCard } from './RecordCard';
 import {
   isPurpleRow, isRefinementAction, toneFor, UNRESOLVED_ACTIONS,
-  hasMultipleCtas, DO_IT_ALL_LABEL, deriveStepLabels,
+  hasMultipleCtas, DO_IT_ALL_LABEL, AFFIRMATIVE_LABEL, deriveStepLabels,
 } from './ultronShared';
 import { ACTIVITY_STEP_MS } from './store';
 import { ActivityTrail, ActivityTrailCards, SessionActions, synthClock } from './ActivityTrail';
@@ -212,8 +212,8 @@ export function UltronCard({ thread, stage, expanded, detachActionable, detachAn
         {showActions && (
           <Actions>
             {actionable && primaryLabel && (
-              <Pill variant="primary" size="sm" onClick={() => trigger(primaryLabel)}>
-                Yes
+              <Pill variant="primary" size="sm" onClick={() => trigger(AFFIRMATIVE_LABEL)}>
+                {AFFIRMATIVE_LABEL}
               </Pill>
             )}
             {actionable && (
@@ -289,23 +289,32 @@ export function UltronActionCard({ thread, stage, onAction, onRefinement, onSave
     else onAction(thread.id, label);
   };
 
+  // The person the decision is about (a follow-up's single candidate). Their
+  // avatar rides the card's top-right corner instead of a full record card.
+  const person = actionable && !(tasks && tasks.length > 0) && records.length > 0 ? records[0] : undefined;
+
   return (
     <ActionCard data-tone={toneFor(thread)}>
-      {actionable && <Prompt>{prompt}</Prompt>}
+      {actionable && (
+        <ActionHeader>
+          <Prompt>{prompt}</Prompt>
+          {person && (
+            <CardAvatar>
+              <Avatar size="md" src={avatarUrl(person.avatarSeed)} name={person.title} alt={person.title} />
+            </CardAvatar>
+          )}
+        </ActionHeader>
+      )}
       {/* Workflow-ready / resolved rows aren't a decision — they just offer to
           save the resolved play. Ask for it explicitly above the Save button. */}
       {offerWorkflow && !actionable && <Prompt>Want me to save this as a reusable workflow?</Prompt>}
       {tasks && tasks.length > 0 ? (
         <PlanTaskList tasks={tasks} />
-      ) : actionable && records.length > 0 ? (
-        <RecordList>
-          {records.map((r, i) => <RecordCard key={i} record={r} />)}
-        </RecordList>
       ) : null}
       <Actions>
         {actionable && primaryLabel && (
-          <Pill variant="primary" size="sm" onClick={() => trigger(primaryLabel)}>
-            Yes
+          <Pill variant="primary" size="sm" onClick={() => trigger(AFFIRMATIVE_LABEL)}>
+            {AFFIRMATIVE_LABEL}
           </Pill>
         )}
         {actionable && (
@@ -318,7 +327,21 @@ export function UltronActionCard({ thread, stage, onAction, onRefinement, onSave
             Other
           </OtherPill>
         )}
-        {offerWorkflow && (
+        {/* Trailing low-emphasis "save this play" affordance — a ghost button
+            pushed to the right end of the decision row (pill-radius to match the
+            Yes/No choices) so it floats apart without competing with them. */}
+        {actionable && (
+          <SaveWorkflowPill
+            variant="ghost" size="sm"
+            aria-pressed={savedWorkflow}
+            data-on={savedWorkflow || undefined}
+            leadingArtwork={savedWorkflow ? <CheckIcon size={14} /> : <Save01Icon size={14} />}
+            onClick={() => setSavedWorkflow(on => { if (!on) onSaveWorkflow(thread); return !on; })}
+          >
+            Save as future workflow
+          </SaveWorkflowPill>
+        )}
+        {offerWorkflow && !actionable && (
           savedWorkflow ? (
             <Button
               variant="secondary" size="sm"
@@ -339,9 +362,6 @@ export function UltronActionCard({ thread, stage, onAction, onRefinement, onSave
           )
         )}
       </Actions>
-      {/* TODO: wire ESC to skip/dismiss the case. Only the decision prompt is
-          skippable — the resolved / save-as-workflow offer isn't. */}
-      {actionable && <SkipHint>ESC to Skip</SkipHint>}
     </ActionCard>
   );
 }
@@ -527,7 +547,7 @@ type TrailItem =
 
 /** Working milestones carry a flat `detail` string; activity cards take blocks. */
 function workingToMilestone(w: WorkingMilestone): ActivityMilestone {
-  return { icon: w.icon, headline: w.headline, blocks: w.detail ? [{ text: w.detail }] : undefined };
+  return { icon: w.icon, headline: w.headline, blocks: w.detail ? [{ text: w.detail }] : undefined, progress: w.progress, avatars: w.avatars };
 }
 
 /** Analyzing "thinking" steps carry a headline + detail; fold them into the
@@ -1116,15 +1136,19 @@ const ActionCard = styled.div`
   box-shadow: var(--shadow-below-low);
 `;
 
-/* Keyboard hint under the action row — Alloy paragraph / small, muted. */
-const SkipHint = styled.p`
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: var(--text-xs);
-  font-weight: var(--font-weight-regular);
-  line-height: var(--line-height-relaxed);
-  letter-spacing: var(--tracking-normal);
-  color: var(--color-content-inverse-tertiary);
+/* The prompt row: the question takes the lead, the subject's avatar (when the
+   decision is about a specific person) sits in the top-right corner. */
+const ActionHeader = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+`;
+
+/* Top-right corner avatar — stands in for the removed candidate record card. */
+const CardAvatar = styled.span`
+  flex-shrink: 0;
+  display: inline-flex;
 `;
 
 /* The whole header is the accordion toggle — a real button reset to look like
@@ -1571,6 +1595,19 @@ const OtherPill = styled(Button)`
   padding-right: var(--space-3);
 `;
 
+/* Trailing "save as workflow" affordance — right-aligned in the decision row,
+   pill-radius to match the Yes/No choices. Acts as a toggle: the "on" state
+   reads with a brand-tinted fill + leading checkmark (set in the markup). */
+const SaveWorkflowPill = styled(Button)`
+  margin-left: auto;
+  border-radius: var(--radius-full);
+
+  &[data-on] {
+    background: var(--color-green-bg-tertiary);
+    color: var(--color-green-content-primary);
+  }
+`;
+
 /* The answered prompt's residual question text — left-aligned (Ultron's voice) as
    an outlined pill, muted to read as resolved context rather than a live ask. Same
    text size as the operator's outbound bubble, so the asked/answered pair matches. */
@@ -1580,7 +1617,7 @@ const AskedQuestion = styled.p`
   margin: var(--space-2) 0 0;
   padding: var(--space-2) var(--space-4);
   border: 1px solid var(--color-border-opaque);
-  border-radius: var(--radius-full);
+  border-radius: 16px;
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   font-weight: var(--font-weight-medium);
@@ -1617,7 +1654,7 @@ const OutboundBubble = styled.div`
   max-width: 80%;
   padding: var(--space-2) var(--space-4);
   background: var(--color-bg-secondary);
-  border-radius: var(--radius-full);
+  border-radius: 16px;
   animation: ${bubbleIn} 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
 
   @media (prefers-reduced-motion: reduce) { animation: none; }

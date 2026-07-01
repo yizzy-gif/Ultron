@@ -5,33 +5,16 @@
    list / labeled check list).
    ───────────────────────────────────────────────────────────────────────────── */
 
-import { useState, useEffect, useRef, type ReactNode, type ComponentType } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import styled, { keyframes, css } from 'styled-components';
 import {
-  Avatar, Button, ChevronRightIcon, XCloseIcon,
+  Avatar, Button, ChevronRightIcon,
   AIMessageActions, ThumbsUpIcon, ThumbsDownIcon, RefreshCw04Icon,
-  SearchMdIcon, MessageCircle02Icon, TriangleUpIcon, CheckVerified01Icon,
-  Edit01Icon, LineChartUp01Icon, ClockIcon, EyeIcon, CheckIcon, Bell01Icon,
 } from 'alloy-design-system';
-import type { ActivityMilestone, RecordRef, ActivityUsage, UsageEntry, UsageIconKey } from './fixtures';
+import type { ActivityMilestone, RecordRef, ActivityUsage } from './fixtures';
 import { avatarUrl } from './fixtures';
-
-/** Maps a usage entry's icon key to its Alloy glyph — each capability fronts its
- *  Run-details row with an icon that reads its kind at a glance. */
-type UsageIcon = ComponentType<{ size?: number }>;
-const USAGE_ICONS: Record<UsageIconKey, UsageIcon> = {
-  search: SearchMdIcon,
-  message: MessageCircle02Icon,
-  policy: TriangleUpIcon,
-  shield: CheckVerified01Icon,
-  schedule: Edit01Icon,
-  analytics: LineChartUp01Icon,
-  clock: ClockIcon,
-  monitor: EyeIcon,
-  bell: Bell01Icon,
-};
 import { RecordCard } from './RecordCard';
+import { RunDetailsPanel } from './RunDetailsPanel';
 
 export function ActivityTrail({ milestones }: { milestones: ActivityMilestone[] }) {
   return (
@@ -55,9 +38,14 @@ export function ActivityTrail({ milestones }: { milestones: ActivityMilestone[] 
  *  below the last step and morphs it into the resting magnetic mark once the work
  *  is done; `collapsed` starts the session shut (used for reasoning the operator
  *  has already acted past — the active session streams open). */
-export function ActivityTrailCards({ milestones, typingIndex, collapsed, hideActions, running, animateIn }: {
+export function ActivityTrailCards({ milestones, typingIndex, focusIndex, collapsed, hideActions, running, animateIn }: {
   milestones: ActivityMilestone[];
   typingIndex?: number;
+  /** While running, the index of the step Ultron is currently working. Every step
+   *  in the run is shown at once, but only this focused step (and the ones already
+   *  completed before it) read at full opacity; steps past it render as dimmed,
+   *  blank-icon/blank-label skeleton rows until the work reaches them. */
+  focusIndex?: number;
   collapsed?: boolean;
   /** Suppress the group's own feedback row — used when the group sits inside an
    *  <UltronResponse> set, which lifts the feedback below the reply text instead. */
@@ -75,6 +63,7 @@ export function ActivityTrailCards({ milestones, typingIndex, collapsed, hideAct
     <ActivitySession
       milestones={milestones}
       typingIndex={typingIndex}
+      focusIndex={focusIndex}
       hideActions={hideActions}
       running={running}
       defaultCollapsed={collapsed}
@@ -83,75 +72,84 @@ export function ActivityTrailCards({ milestones, typingIndex, collapsed, hideAct
   );
 }
 
-function ActivitySession({ milestones, typingIndex, hideActions, running, defaultCollapsed, animateIn = true }: {
+function ActivitySession({ milestones, typingIndex, focusIndex, hideActions, running, animateIn = true }: {
   milestones: ActivityMilestone[];
   typingIndex?: number;
+  focusIndex?: number;
   hideActions?: boolean;
   running?: boolean;
+  /** Accepted for API compatibility; the session no longer collapses, so it has no
+   *  effect — every activity group stays fully expanded. */
   defaultCollapsed?: boolean;
   animateIn?: boolean;
 }) {
-  const [open, setOpen] = useState(!defaultCollapsed);
-  // Once the operator acts past a session it settles shut — one-way, so they can
-  // still reopen it; the active session stays open as it streams.
-  useEffect(() => { if (defaultCollapsed) setOpen(false); }, [defaultCollapsed]);
-
-  // The group's live working indicator no longer rides the trail — Ultron's single
-  // presence mark lives in the fixed slot above the composer (see UltronActivityCards'
-  // footSlot), morphing Lines → Magnetic as the work goes from running to settled.
-
-  // The session header is identical whether open or shut: a meta summary of the
-  // activities — how many, and how long Ultron "thought" — plus a trailing
-  // chevron. Toggling only rotates the chevron and reveals/hides the list below.
-  const count = milestones.length;
-  // Synthesised thinking time for the demo, derived deterministically from the
-  // activities so it stays stable across renders (no Math.random).
-  const thinkSecs = count * 6 + (milestones.reduce((s, m) => s + m.headline.length, 0) % 18);
-  const thought = thinkSecs < 60 ? `${thinkSecs} sec` : `${Math.round(thinkSecs / 60)} min`;
-  const summary = `Thought for ${thought}`;
-  // While Ultron is actively running this group the summary shows a live status
-  // that advances Thinking → Bridging → … → Crossing; once the group is done it
-  // settles to the completed "Thought for X" recap.
+  // The group has no header — no "Thought for X" recap and no in-trail running label
+  // (Ultron's live working status lives in the fixed presence mark above the composer,
+  // see UltronActivityCards' footSlot). The activity list renders on its own.
 
   return (
     <SessionShell $animate={animateIn}>
-      <SessionHeader type="button" aria-expanded={open} onClick={() => setOpen(o => !o)}>
-        <SummaryText $running={running}>{running ? <RunningLabel /> : summary}</SummaryText>
-        <Chevron data-open={open || undefined} aria-hidden="true"><ChevronRightIcon size={14} /></Chevron>
-      </SessionHeader>
-
-      {open && (
-        <SessionBody>
-          {milestones.map((m, i) => (
-            <RowAnchor key={i}>
-              {i < milestones.length - 1 && <SessionConnector aria-hidden="true" />}
-              <MilestoneContent
-                milestone={m}
-                last
-                /* Each step is its own accordion — collapsed to its headline, with
-                   a chevron that reveals the step's supplemental line. */
-                collapsible
-                typing={i === typingIndex}
-                /* Each executed step carries its own "tools used" trigger — the
-                   actual tools that step drove (Policy Engine, Engage), with detail
-                   normalized to this case — revealed when the operator opens the step.
-                   Steps that drove no tool (reasoning, record-only edits) carry none. */
-                extra={m.usage?.length ? <UsageSummary usage={m.usage} title={m.headline} /> : undefined}
-                icon={
-                  <MilestoneIcon
-                    icon={m.icon}
-                    /* The step Ultron is mid-thought on spins; settled steps check. */
-                    loading={typingIndex === i}
-                  />
-                }
-              />
-            </RowAnchor>
-          ))}
+      <SessionBody>
+          {milestones.map((m, i) => {
+            // The whole run is shown at once. The focused step (the one Ultron is
+            // currently working) and every step already completed before it read at
+            // full opacity; steps past the focus are "upcoming" — dimmed skeleton
+            // rows with a blank leading icon and a blank label until the work
+            // reaches them, at which point they light up in turn.
+            const upcoming = running && typeof focusIndex === 'number' && i > focusIndex;
+            const isFocus = running && typeof focusIndex === 'number' && i === focusIndex;
+            // The connector below this step links it to the next activity, and its look
+            // tracks whether that NEXT activity is done yet: once the lower activity
+            // completes, the segment fills solid green; the segment feeding into the
+            // currently-working step draws green on a loop; segments at/below the working
+            // step are not-yet-reached (a faint dashed track). A settled session fills
+            // every segment solid green.
+            const connectorState: 'done' | 'working' | 'upcoming' =
+              !running || typeof focusIndex !== 'number'
+                ? 'done'
+                : i < focusIndex - 1 ? 'done'       // the activity below this line is already complete
+                : i === focusIndex - 1 ? 'working'  // this line draws into the currently-working step
+                : 'upcoming';                        // at/below the working step — not yet reached
+            return (
+              <RowAnchor key={i}>
+                {i < milestones.length - 1 && <SessionConnector aria-hidden="true" $state={connectorState} />}
+                <MilestoneContent
+                  milestone={m}
+                  last
+                  /* Each step is its own accordion — collapsed to its headline, with
+                     a chevron that reveals the step's supplemental line. */
+                  collapsible
+                  /* Not-yet-reached step: render as a dull, blank-icon/blank-label
+                     placeholder rather than its real content. */
+                  placeholder={upcoming}
+                  /* The currently-working step reads bolder than the settled ones. */
+                  focused={isFocus}
+                  typing={i === typingIndex}
+                  /* Each executed step carries its own "tools used" trigger — the
+                     actual tools that step drove (Policy Engine, Engage), with detail
+                     normalized to this case — revealed when the operator opens the step.
+                     Steps that drove no tool (reasoning, record-only edits) carry none.
+                     Upcoming placeholder rows carry none yet. */
+                  extra={!upcoming && m.usage?.length ? <UsageSummary usage={m.usage} title={m.headline} /> : undefined}
+                  icon={
+                    <MilestoneIcon
+                      icon={m.icon}
+                      /* The focused step spins; completed steps check; upcoming steps
+                         show a blank placeholder dot. While running with a focus index,
+                         the spinner rides the focused step (not the last) so the work
+                         visibly advances down the list. */
+                      loading={typingIndex === i || isFocus || (running && typeof focusIndex !== 'number' && i === milestones.length - 1)}
+                      placeholder={upcoming}
+                    />
+                  }
+                />
+              </RowAnchor>
+            );
+          })}
           {/* Feedback row for the whole group — thumbs up/down, rerun, and a
               timestamp (revealed on hover of the group). */}
           {!hideActions && <SessionActions time={synthClock(milestones)} />}
-        </SessionBody>
-      )}
+      </SessionBody>
     </SessionShell>
   );
 }
@@ -164,11 +162,11 @@ function ActivitySession({ milestones, typingIndex, hideActions, running, defaul
  *  coverage, verify, then bring it home. */
 const RUN_PHASES = ['Thinking', 'Bridging', 'Reinforcing', 'Inspecting', 'Crossing'];
 
-function RunningLabel() {
+export function RunningLabel() {
   const [phase, setPhase] = useState(0);
   useEffect(() => {
     if (phase >= RUN_PHASES.length - 1) return; // hold on the final beat
-    const t = setTimeout(() => setPhase(p => p + 1), 1600);
+    const t = setTimeout(() => setPhase(p => p + 1), 2200);
     return () => clearTimeout(t);
   }, [phase]);
   return (
@@ -227,14 +225,15 @@ export function SessionActions({ time }: { time: string }) {
 }
 
 /** A trigger summarising what a single step drew on — "{N} tools used" — that
- *  opens the run-details drawer on the right, scoped to that step. The toolkit is
- *  derived from the step's own kind, so each step surfaces the actual tools it drove
- *  (Policy Engine, Engage) rather than a fixed canned set. `title` is the step's
- *  headline, shown as the drawer title above the tool summary. */
+ *  opens the rebuilt run-details panel on the right (see RunDetailsPanel). The
+ *  panel renders directly off this step's own `usage` (normalized per-event by
+ *  usageForThread), so each step's drawer reflects the actual tools it drove.
+ *  `title` is the
+ *  step's headline, shown as the panel title. */
 function UsageSummary({ usage, title }: { usage: ActivityUsage; title?: string }) {
   const [open, setOpen] = useState(false);
 
-  // Close the drawer on Escape while it's open.
+  // Close the panel on Escape while it's open.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
@@ -255,128 +254,13 @@ function UsageSummary({ usage, title }: { usage: ActivityUsage; title?: string }
       >
         {usage.length} {usage.length === 1 ? 'tool' : 'tools'} used
       </Button>
-      {open && createPortal(
-        <UsageOverlay role="dialog" aria-modal="true" aria-label="Run details">
-          <UsageScrim onClick={() => setOpen(false)} />
-          <UsageDrawer>
-            <UsageDrawerHeader>
-              <UsageDrawerHeadings>
-                <UsageDrawerTitle>{title ?? 'Run details'}</UsageDrawerTitle>
-                <UsageDrawerSubtitle>
-                  {usage.length} {usage.length === 1 ? 'tool' : 'tools'} used · {usage.map(u => u.name).join(', ')}
-                </UsageDrawerSubtitle>
-              </UsageDrawerHeadings>
-              <UsageClose type="button" aria-label="Close" onClick={() => setOpen(false)}>
-                <XCloseIcon size={18} />
-              </UsageClose>
-            </UsageDrawerHeader>
-            <UsageDrawerBody>
-              <ToolList>
-                {usage.map((it, i) => (
-                  <UsageRow key={it.name} entry={it} first={i === 0} />
-                ))}
-              </ToolList>
-            </UsageDrawerBody>
-          </UsageDrawer>
-        </UsageOverlay>,
-        document.body,
-      )}
+      <RunDetailsPanel
+        open={open}
+        onClose={() => setOpen(false)}
+        title={title}
+        usage={usage}
+      />
     </UsageWrap>
-  );
-}
-
-/** One tool row in the run-details drawer — a compact line (icon + name +
- *  description) that expands into a detail shaped to the tool: the Policy Engine
- *  shows the policies it evaluated and the eligible workers it returned; Engage
- *  shows the message threads it opened. */
-function UsageRow({ entry, first }: { entry: UsageEntry; first: boolean }) {
-  const Icon = USAGE_ICONS[entry.icon];
-  const { policies, eligible, threads, notification } = entry;
-  const eligibleMore = eligible ? eligible.total - eligible.items.length : 0;
-  const threadsMore = threads ? threads.total - threads.items.length : 0;
-  // Each tool's detail starts expanded — the drawer shows every tool's work at a
-  // glance — and can be collapsed independently of the others.
-  const [open, setOpen] = useState(true);
-  return (
-    <ToolRow data-first={first || undefined}>
-      <ToolHeader type="button" aria-expanded={open} onClick={() => setOpen(o => !o)}>
-        <ToolTile aria-hidden="true"><Icon size={16} /></ToolTile>
-        <ToolHeadings>
-          <ToolName>{entry.name}</ToolName>
-          <ToolDesc>{entry.description}</ToolDesc>
-        </ToolHeadings>
-        <ToolChevron data-open={open || undefined} aria-hidden="true"><ChevronRightIcon size={16} /></ToolChevron>
-      </ToolHeader>
-      {open && (
-        <ToolDetail>
-          {/* Policy Engine — the policies it checked against, each a green tick. */}
-          {policies && (
-            <ToolField>
-              <ToolFieldLabel>Policies evaluated · {policies.total}</ToolFieldLabel>
-              <PolicyList>
-                {policies.items.map((p, k) => (
-                  <li key={k}><PolicyCheck aria-hidden="true"><CheckIcon size={14} /></PolicyCheck><span>{p}</span></li>
-                ))}
-              </PolicyList>
-            </ToolField>
-          )}
-          {/* Policy Engine — the eligible workers it returned, ranked by match. */}
-          {eligible && (
-            <ToolField>
-              <ToolFieldLabel>Returned · {eligible.total} {eligible.unit}</ToolFieldLabel>
-              <CandidateList>
-                {eligible.items.map((c, k) => (
-                  <CandidateRow key={k}>
-                    <CandidateName>{c.name}</CandidateName>
-                    <CandidateMeta>{c.match} · {c.distance}</CandidateMeta>
-                  </CandidateRow>
-                ))}
-              </CandidateList>
-              {eligibleMore > 0 && <MoreLine>+{eligibleMore} more {eligible.moreNoun}</MoreLine>}
-            </ToolField>
-          )}
-          {/* Engage — the message threads it opened, one row per recipient. */}
-          {threads && (
-            <ToolField>
-              <ToolFieldLabel>Threads · {threads.total}</ToolFieldLabel>
-              <ThreadList>
-                {threads.items.map((t, k) => (
-                  <ThreadRow key={k}>
-                    <Avatar size="md" src={avatarUrl(t.seed)} name={t.name} alt="" />
-                    <ThreadBody>
-                      <ThreadName>{t.name}</ThreadName>
-                      <ThreadPreview>{t.preview}</ThreadPreview>
-                    </ThreadBody>
-                    <ThreadStatus $tone={t.tone}>{t.status}</ThreadStatus>
-                    <ThreadChevron aria-hidden="true"><ChevronRightIcon size={16} /></ThreadChevron>
-                  </ThreadRow>
-                ))}
-              </ThreadList>
-              {threadsMore > 0 && <MoreLine>+{threadsMore} more {threads.moreNoun}</MoreLine>}
-            </ToolField>
-          )}
-          {/* Engage notification — a single recipient and the message body sent. */}
-          {notification && (
-            <>
-              <ToolField>
-                <ToolFieldLabel>Recipient</ToolFieldLabel>
-                <ThreadRow>
-                  <Avatar size="md" src={avatarUrl(notification.seed)} name={notification.name} alt="" />
-                  <ThreadBody>
-                    <ThreadName>{notification.name}</ThreadName>
-                    <ThreadPreview>{notification.role} · {notification.channel}</ThreadPreview>
-                  </ThreadBody>
-                </ThreadRow>
-              </ToolField>
-              <ToolField>
-                <ToolFieldLabel>Message</ToolFieldLabel>
-                <MessageBox>{notification.message}</MessageBox>
-              </ToolField>
-            </>
-          )}
-        </ToolDetail>
-      )}
-    </ToolRow>
   );
 }
 
@@ -410,17 +294,27 @@ function BlockRecords({ records, initial = 3 }: { records: RecordRef[]; initial?
   );
 }
 
-function MilestoneIcon({ slotRef, hidden, loading }: {
+function MilestoneIcon({ slotRef, hidden, loading, placeholder }: {
   icon: ActivityMilestone['icon'];
   slotRef?: (el: HTMLElement | null) => void;
   hidden?: boolean;
   loading?: boolean;
+  /** A not-yet-reached step: show an empty placeholder dot instead of the
+   *  loader/check, so the row reads as queued until the work reaches it. */
+  placeholder?: boolean;
 }) {
   // A step in progress shows a spinning ring; once it completes the ring closes
   // into a full circle and the checkmark draws on — one continuous SVG so the
   // loader morphs into the check instead of hard-swapping. `slotRef` lets the
   // resting agent mark measure this icon's position; `hidden` keeps the icon's
   // layout while that mark covers it, so geometry stays measurable.
+  if (placeholder) {
+    return (
+      <IconBadge ref={slotRef} aria-hidden="true" $hidden={hidden} $placeholder>
+        <PlaceholderDot />
+      </IconBadge>
+    );
+  }
   return (
     <IconBadge ref={slotRef} aria-hidden="true" $hidden={hidden} $loading={loading}>
       <StatusMark viewBox="0 0 24 24" $loading={loading}>
@@ -435,7 +329,20 @@ function MilestoneIcon({ slotRef, hidden, loading }: {
  *  trail row and the standalone step card. While `typing`, the headline pulses
  *  (a live "thinking" blink) and the secondary text types out beneath it —
  *  Ultron mid-thought. */
-function MilestoneContent({ milestone, last, typing, icon, collapsible = true, extra }: { milestone: ActivityMilestone; last?: boolean; typing?: boolean; icon?: ReactNode; collapsible?: boolean; extra?: ReactNode }) {
+function MilestoneContent({ milestone, last, typing, icon, collapsible = true, extra, placeholder, focused }: { milestone: ActivityMilestone; last?: boolean; typing?: boolean; icon?: ReactNode; collapsible?: boolean; extra?: ReactNode; placeholder?: boolean; focused?: boolean }) {
+  // A not-yet-reached step renders dull, with a blank leading icon — but it shows
+  // its real label text so the operator can read what's queued; the icon fills in
+  // (loader → check) once the work reaches it.
+  if (placeholder) {
+    return (
+      <Content $last={last} $dim>
+        <Header as="div">
+          {icon}
+          <Headline>{milestone.headline}</Headline>
+        </Header>
+      </Content>
+    );
+  }
   const hasBlocks = !!milestone.blocks?.length;
   // Extra content hung under this step (the group's "tools used" trigger).
   const hasExtra = !!extra;
@@ -469,18 +376,31 @@ function MilestoneContent({ milestone, last, typing, icon, collapsible = true, e
             title (top row: icon + title); the connected trail leaves it out
             (the icon lives in the left rail instead). */}
         {icon}
-        <Headline $blink={!!typing}>{milestone.headline}</Headline>
+        {/* The title stays static — only the sub-context (progress line / typewriter)
+            animates while the step runs. */}
+        <Headline $focused={!!focused}>{milestone.headline}</Headline>
         {interactive && (
           <Chevron data-open={open || undefined} aria-hidden="true"><ChevronRightIcon size={14} /></Chevron>
         )}
       </Header>
 
-      {/* Running progress sub-row — a live status line that cycles through the
-          step's progress beats (each pops in as it replaces the last) while the
-          step is working, then settles to the final result in the success tone. */}
+      {/* Running progress sub-row — a live status line that keeps cycling through the
+          step's progress beats (each pops in as it replaces the last) for the WHOLE
+          time the step is the running/focused one, then settles to the final result in
+          the success tone. Driven by `focused` (not just the brief typing window) so
+          the context keeps updating while the activity runs. */}
       {milestone.progress?.length ? (
         <ProgressWrap $indent={!!icon}>
-          <MilestoneProgress steps={milestone.progress} avatars={milestone.avatars} live={!!typing} />
+          <MilestoneProgress
+            steps={milestone.progress}
+            avatars={milestone.avatars}
+            live={!!(typing || focused)}
+            /* The trailing matched-user avatars show while the step is running (as the
+               people are reached) and whenever it's expanded. Once it settles and
+               collapses they tuck away, leaving just the status line — reopening the
+               step brings them back. */
+            showAvatars={open || typing || focused}
+          />
         </ProgressWrap>
       ) : null}
 
@@ -516,7 +436,7 @@ function MilestoneContent({ milestone, last, typing, icon, collapsible = true, e
 /** How long each running progress beat holds before the next replaces it. Sized
  *  so a short count-up sequence ticks through roughly within a step's reveal
  *  cadence (ACTIVITY_STEP_MS) before it settles to the result. */
-const PROGRESS_BEAT_MS = 620;
+const PROGRESS_BEAT_MS = 900;
 
 /** A step's running-progress line. While `live`, it advances through the beats —
  *  each new beat re-mounts (via key) so it pops in, replacing the previous one —
@@ -524,7 +444,7 @@ const PROGRESS_BEAT_MS = 620;
  *  result straight away. The terminal beat reads in the success tone (done),
  *  earlier beats in a muted "still working" tone. The matched-user avatars (when
  *  present) ride the trailing end of the row once the step settles. */
-function MilestoneProgress({ steps, avatars, live }: { steps: string[]; avatars?: string[]; live?: boolean }) {
+function MilestoneProgress({ steps, avatars, live, showAvatars }: { steps: string[]; avatars?: string[]; live?: boolean; showAvatars?: boolean }) {
   const last = steps.length - 1;
   const [i, setI] = useState(live ? 0 : last);
 
@@ -547,10 +467,14 @@ function MilestoneProgress({ steps, avatars, live }: { steps: string[]; avatars?
   const done = i >= last;
   return (
     <ProgressRow>
-      <ProgressLine key={i} $done={done} aria-live="polite">
+      <ProgressLine key={i} $done={done} $animate={!!live} aria-live="polite">
         {steps[i]}
       </ProgressLine>
-      {done && avatars?.length ? <AvatarStack seeds={avatars} /> : null}
+      {/* Show the matched-user cluster whenever the step is running (`live`) — not
+          just once its beats reach the settled result — so multi-beat steps (whose
+          `done` lands after focus has moved on) still surface their avatar group
+          during the run. Settled steps show it on the final beat / when expanded. */}
+      {showAvatars && (done || live) && avatars?.length ? <AvatarStack seeds={avatars} /> : null}
     </ProgressRow>
   );
 }
@@ -617,61 +541,20 @@ const SessionShell = styled.div<{ $animate?: boolean }>`
   @media (prefers-reduced-motion: reduce) { animation: none; }
 `;
 
-/* The session toggle: the one-line summary row, identical whether the session
-   is open or shut — only the chevron rotates and the activity list below it
-   reveals. */
-const SessionHeader = styled.button`
-  all: unset;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  width: 100%;
-  box-sizing: border-box;
-  cursor: pointer;
-
-  &:focus-visible {
-    box-shadow: 0 0 0 2px var(--color-border-focus);
-    border-radius: var(--radius-sm);
-  }
-`;
-
-/* The live running label pulses (a soft opacity blink) so it reads as active,
-   matching the typing-headline blink used elsewhere in the trail. */
-const runningBlink = keyframes`
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.45; }
-`;
-
-/* Sizes to its content (no flex-grow) so the trailing chevron sits right after
-   the label rather than at the far edge of the row. While running, the label reads
-   a touch stronger (secondary, not disabled) and blinks so the live status stands
-   out from the settled recap. */
-const SummaryText = styled.span<{ $running?: boolean }>`
-  min-width: 0;
-  text-align: left;
-  font-size: var(--text-sm);
-  font-weight: var(--font-weight-medium);
-  line-height: var(--line-height-snug);
-  color: ${p => (p.$running ? 'var(--color-content-secondary)' : 'var(--color-content-disabled)')};
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  animation: ${p => (p.$running ? runningBlink : 'none')} 1.1s ease-in-out infinite;
-
-  @media (prefers-reduced-motion: reduce) { animation: none; }
-`;
-
-/* Trailing ellipsis for the running status. Static dots — the whole label
-   (text + ellipsis) pulses together via SummaryText's running blink, so the dots
-   don't need their own sequential animation. */
+/* Trailing ellipsis for the running status (used by RunningLabel, which still drives
+   the presence mark above the composer). Static dots — the label that hosts it pulses
+   as a whole, so the dots don't need their own sequential animation. */
 const Ellipsis = styled.span``;
 
-/* Condensed activity stack inside an expanded session. */
+/* The activity stack — rendered directly (the group has no header). A generous gap
+   between rows (space-5) sits well above the tight heading→sub-context gap within a
+   row (space-1), so each activity reads as one unit — heading + its sub-line — with
+   clear separation from the next. */
 const SessionBody = styled.div`
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-5);
   padding-top: var(--space-3);
 `;
 
@@ -681,19 +564,73 @@ const RowAnchor = styled.div`
   position: relative;
 `;
 
-/* Dashed vertical line linking one session step's leading icon to the next,
-   running down the icon column and bridging the inter-row gap. Uses the neutral
-   divider stroke so it reads on both light and dark surfaces. Inset top/bottom by
-   space-1 for breathing room. */
-const SessionConnector = styled.span`
+/* A bright segment sweeps top → bottom on a loop, reading as the connection being
+   drawn from the previous activity down to the next while Ultron works the step. */
+const connectorDraw = keyframes`
+  0%   { background-position: 0 -100%; }
+  100% { background-position: 0 200%; }
+`;
+
+/* The solid green line draws itself on once — growing top → bottom from the
+   completed activity toward the next — as the segment settles to "done". */
+const connectorFill = keyframes`
+  from { background-size: 100% 0%; }
+  to   { background-size: 100% 100%; }
+`;
+
+/* Vertical line linking one session step's leading icon to the next, running down
+   the icon column and bridging the inter-row gap. Inset top/bottom by space-1 for
+   breathing room. Its look tracks the work:
+   · done     — a solid, full green (success) line that draws itself on top→bottom
+                as the activity below it completes.
+   · working  — a green (success) segment drawing top→bottom on a loop over a faint
+                track, so the link reads as being drawn into the working activity.
+   · upcoming — a faint dashed track (not yet reached). */
+const SessionConnector = styled.span<{ $state?: 'done' | 'working' | 'upcoming' }>`
   position: absolute;
   /* Centered on the 32px icon column. */
   left: calc(var(--space-8) / 2);
   top: calc(var(--space-8) + var(--space-1));
-  bottom: calc(var(--space-1) - var(--space-2));
-  width: 0;
-  border-left: 1.5px dashed var(--color-border-opaque);
+  /* Extend down across the wider inter-row gap (space-5), stopping a touch short of
+     the next step's icon so it reads as connecting the two. */
+  bottom: calc(var(--space-1) - var(--space-5));
   pointer-events: none;
+
+  ${p => p.$state === 'working'
+    ? css`
+        width: 1.5px;
+        /* Faint track behind, with a brand-coloured segment sweeping down it. */
+        background-color: var(--color-border-opaque);
+        background-image: linear-gradient(
+          to bottom,
+          transparent 0%,
+          var(--color-success-content) 50%,
+          transparent 100%
+        );
+        background-size: 100% 55%;
+        background-repeat: no-repeat;
+        animation: ${connectorDraw} 1.25s linear infinite;
+      `
+    : p.$state === 'upcoming'
+    ? css`
+        width: 0;
+        border-left: 1.5px dashed var(--color-border-opaque);
+      `
+    : css`
+        /* done — a full green line that draws on top→bottom (growing from the
+           activity above toward the one below) as the lower step completes. */
+        width: 1.5px;
+        background-image: linear-gradient(
+          var(--color-success-content),
+          var(--color-success-content)
+        );
+        background-repeat: no-repeat;
+        background-position: top center;
+        background-size: 100% 100%;
+        animation: ${connectorFill} 0.45s var(--ease-out) both;
+      `};
+
+  @media (prefers-reduced-motion: reduce) { animation: none; }
 `;
 
 /* The group's feedback footer — sits below the last activity with quiet top
@@ -732,6 +669,11 @@ const ActionsRow = styled.div`
    opens the run detail in a right-side drawer. */
 const UsageWrap = styled.div`
   display: flex;
+
+  /* Tighten the gap before the trailing chevron — 4px right padding. */
+  & > button {
+    padding-right: var(--space-1);
+  }
 `;
 
 /* Holds the group's "tools used" trigger beneath its last activity, indented past
@@ -741,404 +683,6 @@ const ExtraSlot = styled.div<{ $indent?: boolean }>`
   padding-left: ${p => (p.$indent ? 'calc(var(--space-8) + var(--space-3))' : '0')};
 `;
 
-/* ── Usage drawer ──────────────────────────────────────────────────────────── */
-
-/* Full-viewport overlay that anchors the drawer to the right edge. */
-const usageScrimIn = keyframes`
-  from { opacity: 0; }
-  to   { opacity: 1; }
-`;
-const usageDrawerIn = keyframes`
-  from { transform: translateX(100%); }
-  to   { transform: translateX(0); }
-`;
-
-const UsageOverlay = styled.div`
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  justify-content: flex-end;
-`;
-
-const UsageScrim = styled.div`
-  position: absolute;
-  inset: 0;
-  background: rgba(2, 6, 23, 0.45);
-  animation: ${usageScrimIn} 200ms var(--ease-out);
-`;
-
-/* The panel itself — slides in from the right, a left-projecting shadow lifts it
-   above the page. */
-const UsageDrawer = styled.div`
-  position: relative;
-  width: min(360px, 86vw);
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--color-bg-primary);
-  box-shadow: -12px 0 32px rgba(2, 6, 23, 0.18);
-  animation: ${usageDrawerIn} 260ms var(--ease-out);
-
-  @media (prefers-reduced-motion: reduce) { animation: none; }
-`;
-
-const UsageDrawerHeader = styled.div`
-  flex-shrink: 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
-  min-height: 48px;
-  padding: var(--space-3);
-  border-bottom: 1px solid var(--color-border-opaque);
-`;
-
-const UsageDrawerHeadings = styled.div`
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-`;
-
-const UsageDrawerTitle = styled.h2`
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-snug);
-  color: var(--color-content-primary);
-`;
-
-/* Tools summary beneath the drawer title — "{N} tools used · Policy Engine, Engage",
-   the names of the tools the step actually drove. */
-const UsageDrawerSubtitle = styled.p`
-  margin: var(--space-1) 0 0;
-  font-family: var(--font-sans);
-  font-size: var(--text-xs);
-  font-weight: var(--font-weight-regular);
-  line-height: var(--line-height-snug);
-  color: var(--color-content-tertiary);
-`;
-
-const UsageClose = styled.button`
-  all: unset;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--space-8);
-  height: var(--space-8);
-  border-radius: var(--radius-md);
-  color: var(--color-content-secondary);
-  cursor: pointer;
-
-  &:hover { background: var(--color-bg-secondary); }
-  &:focus-visible { box-shadow: 0 0 0 2px var(--color-border-focus); }
-`;
-
-const UsageDrawerBody = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: 0;
-  overflow-y: auto;
-`;
-
-const ToolList = styled.div`
-  display: flex;
-  flex-direction: column;
-`;
-
-/* One tool/skill/data row — a single-line header plus its (collapsible) detail.
-   Each row carries its own 12px left/right gutter (rather than the list wrapper) so
-   it owns its inset. A hairline divider separates each from the last — inset on the
-   left to start at the title (row gutter + icon tile column + header gap, matching
-   ToolDetail) and held off the right gutter, so it reads as a row separator under
-   the text rather than a full-bleed rule. */
-const ToolRow = styled.div`
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  padding: 0 var(--space-3);
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    /* gutter + tile + header gap — the ::before is anchored to the padding box, so
-       the row's own left gutter is added back in to land on the title. */
-    left: calc(var(--space-3) + var(--space-8) + var(--space-3));
-    /* Runs flush to the row's right edge — no right gutter. */
-    right: 0;
-    border-top: 1px solid var(--color-border-opaque);
-  }
-
-  &[data-first]::before { display: none; }
-`;
-
-/* The always-visible row: rounded icon tile + a two-line name/description block +
-   disclosure chevron. The description rides under the name (rather than hiding
-   behind the expand) so every tool reads at a glance. */
-const ToolHeader = styled.button`
-  all: unset;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  width: 100%;
-  padding: var(--space-3) 0;
-  cursor: pointer;
-
-  &:focus-visible { box-shadow: 0 0 0 2px var(--color-border-focus); border-radius: var(--radius-sm); }
-`;
-
-/* Rounded icon tile keyed to the section's kind — 32px (space-8). */
-const ToolTile = styled.span`
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--space-8);
-  height: var(--space-8);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-secondary);
-  color: var(--color-content-secondary);
-`;
-
-/* The name + description stack — takes the row's flexible width between the tile
-   and the chevron. */
-const ToolHeadings = styled.span`
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  text-align: left;
-`;
-
-const ToolName = styled.span`
-  min-width: 0;
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-snug);
-  color: var(--color-content-primary);
-`;
-
-const ToolDesc = styled.span`
-  /* Alloy paragraph / small */
-  font-family: var(--font-sans);
-  font-size: var(--text-xs);
-  font-weight: var(--font-weight-regular);
-  line-height: var(--line-height-snug);
-  letter-spacing: var(--tracking-normal);
-  color: var(--color-content-tertiary);
-`;
-
-/* Disclosure chevron — points right when collapsed, rotates down when open.
-   Sits in a 32px square slot so its tap target matches the leading icon tile and
-   the glyph stays centered as it rotates. */
-const ToolChevron = styled.span`
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--space-8);
-  height: var(--space-8);
-  color: var(--color-content-tertiary);
-  transition: transform var(--duration-base) var(--ease-default);
-  &[data-open] { transform: rotate(90deg); }
-`;
-
-/* Expanded detail — hung under the name, clearing the icon tile column (tile
-   width space-8, plus the header gap space-3). */
-const ToolDetail = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  padding: 0 0 var(--space-4);
-  padding-left: calc(var(--space-8) + var(--space-3));
-`;
-
-/* One labeled field inside the expanded detail — an eyebrow label over its value
-   (the query block or the summary text). */
-const ToolField = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-`;
-
-/* Field eyebrow — "QUERY" / "SUMMARY", matching the section label treatment.
-   A touch below --text-xs (12px) since the uppercase + wide tracking lets it read
-   fine smaller as a quiet eyebrow. */
-const ToolFieldLabel = styled.span`
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-  color: var(--color-content-tertiary);
-`;
-
-/* ── Policy Engine detail ──────────────────────────────────────────────────── */
-
-/* The evaluated-policies list — each line a green tick + the policy it checked. */
-const PolicyList = styled.ul`
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-
-  & li {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    font-family: var(--font-sans);
-    font-size: var(--text-sm);
-    line-height: var(--line-height-snug);
-    color: var(--color-content-primary);
-  }
-`;
-
-/* The leading green tick on a policy line. */
-const PolicyCheck = styled.span`
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-success-content);
-`;
-
-/* The returned eligible workers — a ranked column of name + match/distance rows. */
-const CandidateList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-`;
-
-/* One eligible-worker row — name on the left, match score + distance trailing. */
-const CandidateRow = styled.div`
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
-`;
-
-const CandidateName = styled.span`
-  min-width: 0;
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  line-height: var(--line-height-snug);
-  color: var(--color-content-primary);
-`;
-
-const CandidateMeta = styled.span`
-  flex-shrink: 0;
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  line-height: var(--line-height-snug);
-  color: var(--color-content-tertiary);
-  white-space: nowrap;
-`;
-
-/* "+N more …" overflow line beneath a returned/threads list. */
-const MoreLine = styled.div`
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  line-height: var(--line-height-snug);
-  color: var(--color-content-tertiary);
-`;
-
-/* ── Engage detail ─────────────────────────────────────────────────────────── */
-
-/* The message-thread list — one row per recipient, hairline-separated. */
-const ThreadList = styled.div`
-  display: flex;
-  flex-direction: column;
-`;
-
-/* One thread row: avatar + name/preview stack + status chip + chevron. A divider
-   separates each from the last (inset to start under the name, like the tool rows). */
-const ThreadRow = styled.div`
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) 0;
-
-  &:not(:first-child)::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    border-top: 1px solid var(--color-border-opaque);
-  }
-`;
-
-/* The name + latest-line stack — takes the row's flexible width. */
-const ThreadBody = styled.div`
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-`;
-
-const ThreadName = styled.span`
-  min-width: 0;
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: var(--font-weight-medium);
-  line-height: var(--line-height-snug);
-  color: var(--color-content-primary);
-`;
-
-/* The latest line in the thread — their reply, or the delivery state. Truncates so
-   a long reply keeps the row to two lines. */
-const ThreadPreview = styled.span`
-  min-width: 0;
-  font-family: var(--font-sans);
-  font-size: var(--text-xs);
-  line-height: var(--line-height-snug);
-  color: var(--color-content-tertiary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`;
-
-/* Status chip — a warm reply ("Interested"/"Read") reads green; a still-delivered
-   thread reads quiet. */
-const ThreadStatus = styled.span<{ $tone: 'positive' | 'muted' }>`
-  flex-shrink: 0;
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: ${p => (p.$tone === 'positive' ? 'var(--font-weight-medium)' : 'var(--font-weight-regular)')};
-  line-height: var(--line-height-snug);
-  white-space: nowrap;
-  color: ${p => (p.$tone === 'positive' ? 'var(--color-success-content)' : 'var(--color-content-tertiary)')};
-`;
-
-/* Trailing chevron on a thread row — hints the thread opens. */
-const ThreadChevron = styled.span`
-  flex-shrink: 0;
-  display: inline-flex;
-  color: var(--color-content-tertiary);
-`;
-
-/* The message body of an Engage notification — the text Ultron sent, in a quiet
-   bordered card so it reads as the verbatim message rather than UI copy. */
-const MessageBox = styled.div`
-  padding: var(--space-3);
-  border: 1px solid var(--color-border-opaque);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-secondary);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  line-height: var(--line-height-normal);
-  color: var(--color-content-primary);
-`;
 
 /* A thumbs button that lights up when it's the active rating; otherwise it
    matches the tertiary chrome of the rest of the cluster. */
@@ -1213,7 +757,7 @@ const IconCol = styled.div`
    a badge-sized icon column that lines up under the header avatar. `$hidden`
    keeps the slot's layout (so the floating mark can still measure it) while the
    mark visually stands in for it. */
-const IconBadge = styled.span<{ $hidden?: boolean; $loading?: boolean }>`
+const IconBadge = styled.span<{ $hidden?: boolean; $loading?: boolean; $placeholder?: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1222,6 +766,26 @@ const IconBadge = styled.span<{ $hidden?: boolean; $loading?: boolean }>`
   height: var(--space-8);
   color: var(--color-success-content);
   visibility: ${p => (p.$hidden ? 'hidden' : 'visible')};
+`;
+
+/* The leading marker for an upcoming (not-yet-reached) step — a hollow, muted ring
+   that stands in for the loader/check until the work reaches the step. Sized to the
+   16px icon slot so the row's geometry matches a real step's. */
+const skeletonPulse = keyframes`
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+`;
+
+const PlaceholderDot = styled.span`
+  width: var(--space-4);
+  height: var(--space-4);
+  border-radius: var(--radius-full);
+  box-sizing: border-box;
+  /* An outlined muted circle marks the step's leading slot until the work reaches it. */
+  border: 1.5px solid var(--color-border-opaque);
+  animation: ${skeletonPulse} 1.6s ease-in-out infinite;
+
+  @media (prefers-reduced-motion: reduce) { animation: none; }
 `;
 
 /* In-progress step indicator that resolves to the success check. A single SVG
@@ -1304,10 +868,13 @@ const Connector = styled.span`
   mix-blend-mode: multiply;
 `;
 
-const Content = styled.div<{ $last?: boolean }>`
+const Content = styled.div<{ $last?: boolean; $dim?: boolean }>`
   flex: 1;
   min-width: 0;
   padding-bottom: ${p => (p.$last ? '0' : 'var(--space-4)')};
+  /* Upcoming (not-yet-reached) steps read dull until the work focuses on them. */
+  opacity: ${p => (p.$dim ? 0.45 : 1)};
+  transition: opacity var(--duration-base) var(--ease-out);
 `;
 
 const Header = styled.div<{ $interactive?: boolean }>`
@@ -1325,30 +892,22 @@ const Header = styled.div<{ $interactive?: boolean }>`
   }
 `;
 
-/* While the row is the one Ultron is mid-thought on, the label pulses (a soft
-   opacity blink) to read as live, then settles solid once the row finishes. */
-const labelBlink = keyframes`
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.4; }
-`;
-
-const Headline = styled.span<{ $blink?: boolean }>`
+/* The step title — always static (no blink). The currently-working step reads
+   bolder; its live pulse is carried by the sub-context line, not the title. */
+const Headline = styled.span<{ $focused?: boolean }>`
   flex: 1;
   min-width: 0;
   text-align: left;
   font-size: var(--text-sm); /* 14px */
-  font-weight: var(--font-weight-medium);
+  font-weight: ${p => (p.$focused ? 'var(--font-weight-bold)' : 'var(--font-weight-medium)')};
   color: var(--color-content-primary);
   line-height: var(--line-height-snug);
-  animation: ${p => (p.$blink ? labelBlink : 'none')} 1.1s ease-in-out infinite;
-
-  @media (prefers-reduced-motion: reduce) { animation: none; }
 `;
 
 /* Chevron points right when collapsed, rotates to point down when expanded. */
 const Chevron = styled.span`
   display: inline-flex;
-  color: var(--color-content-tertiary);
+  color: var(--color-content-disabled);
   transition: transform var(--duration-base) var(--ease-default);
   &[data-open] { transform: rotate(90deg); }
 `;
@@ -1361,8 +920,9 @@ const ProgressWrap = styled.div<{ $indent?: boolean }>`
   padding-left: ${p => (p.$indent ? 'calc(var(--space-8) + var(--space-3))' : '0')};
 `;
 
-/* Each progress beat pops in as it replaces the last — a quick fade + small
-   upward settle, so a status change reads as a fresh line landing. */
+/* Each progress beat pops in as it replaces the last — a fade paired with a small
+   upward rise, so every status update reads as a fresh line landing while the step
+   runs. Kept subtle and eased so it lands cleanly rather than trembling. */
 const progressPop = keyframes`
   from { opacity: 0; transform: translateY(var(--space-1)); }
   to   { opacity: 1; transform: translateY(0); }
@@ -1378,7 +938,7 @@ const ProgressRow = styled.div`
 
 /* The status line itself — Alloy paragraph / medium, in the muted content-tertiary
    tone for both the in-flight beats and the settled result. */
-const ProgressLine = styled.div<{ $done?: boolean }>`
+const ProgressLine = styled.div<{ $done?: boolean; $animate?: boolean }>`
   flex: 1;
   min-width: 0;
   font-family: var(--font-sans);
@@ -1386,8 +946,13 @@ const ProgressLine = styled.div<{ $done?: boolean }>`
   font-weight: var(--font-weight-regular);
   line-height: var(--line-height-loose);
   letter-spacing: var(--tracking-normal);
-  color: var(--color-content-tertiary);
-  animation: ${progressPop} var(--duration-base) var(--ease-out);
+  /* Settled (done) sub-text reads in the success green — matching the completed
+     step's check — while in-flight beats stay muted. */
+  color: ${p => (p.$done ? 'var(--color-success-content)' : 'var(--color-content-tertiary)')};
+  /* Only crossfade while the step is live (a beat ticking in). A settled line that
+     re-mounts — e.g. when the finished group folds into a response set — must NOT
+     replay the pop, or it reads as a stray flash after the activities have settled. */
+  animation: ${p => (p.$animate ? css`${progressPop} var(--duration-slow) var(--ease-out)` : 'none')};
 
   @media (prefers-reduced-motion: reduce) { animation: none; }
 `;
@@ -1446,8 +1011,8 @@ const StackMore = styled.span`
 /* The sub-context eases in once the headline finishes typing, rather than
    popping in — a soft fade + small upward settle. */
 const blocksIn = keyframes`
-  from { opacity: 0; transform: translateY(calc(-1 * var(--space-1))); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 `;
 
 const Blocks = styled.div<{ $indent?: boolean }>`

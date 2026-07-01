@@ -637,7 +637,7 @@ export function AgentMark({
     };
 
     const reduced = (() => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } })();
-    const sp = clamp(motionSpeed, 0.4, 2);
+    const sp = clamp(motionSpeed, 0.4, 3);
 
     // No animation loop → snap the alert to its target so the color still applies.
     if (reduced || state === 'static') alertRef.current = alertTargetRef.current;

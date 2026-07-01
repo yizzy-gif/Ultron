@@ -11,11 +11,39 @@
    DEMO ONLY.
    ───────────────────────────────────────────────────────────────────────────── */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ComponentType } from 'react';
 import styled, { keyframes } from 'styled-components';
+import {
+  ClockIcon, Users03Icon, CurrencyDollarIcon, CheckVerified01Icon,
+  ClipboardCheckIcon, BarChart02Icon, MessageCircle02Icon, File04Icon, Bell01Icon,
+} from 'alloy-design-system';
 import { AgentMark } from './AgentMark';
 import { INCOMING_EVENTS } from './fixtures';
 import type { IncomingEvent } from './fixtures';
+
+/** Leading icon per capability eyebrow — a light-chip glyph that gives each feed
+ *  row a quick visual category cue. Falls back to the stream mark for anything
+ *  unmapped. */
+const CAP_ICONS: Record<string, ComponentType<{ size?: number }>> = {
+  'Coverage Recovery': Users03Icon,
+  'Fill Optimization': Users03Icon,
+  'Recruiting': Users03Icon,
+  'Users': Users03Icon,
+  'Attendance': ClockIcon,
+  'Attendance Recovery': ClockIcon,
+  'Time Off': ClockIcon,
+  'Scheduling': ClockIcon,
+  'Compliance': CheckVerified01Icon,
+  'Onboarding': ClipboardCheckIcon,
+  'Payroll Operations': CurrencyDollarIcon,
+  'Invoicing': File04Icon,
+  'Reporting': BarChart02Icon,
+  'Marketplace Optimization': BarChart02Icon,
+  'Engagement': MessageCircle02Icon,
+  'Autonomous Operations': Bell01Icon,
+};
+const capIcon = (capability: string): ComponentType<{ size?: number }> =>
+  CAP_ICONS[capability] ?? Bell01Icon;
 
 /** What Ultron is doing while it rests on the Live landing — cycled below the
  *  mark, matching the secondary-nav identity card's copy. */
@@ -240,7 +268,10 @@ export function LiveLanding({ onDetectRisk }: LiveLandingProps) {
 
       {cards.length > 0 && (
         <Feed aria-label="Live event feed">
-          {cards.map(c => (
+          {cards.map(c => {
+            // Leading category glyph for this row's capability.
+            const CapIcon = capIcon(c.event.capability);
+            return (
             // The Row wrapper carries the lifecycle phase: it animates its
             // height (slide), opacity (fade) and scale (pop) as the phase moves
             // entering → in → leaving. The inner Clip hides the card while the
@@ -248,22 +279,25 @@ export function LiveLanding({ onDetectRisk }: LiveLandingProps) {
             <Row key={c.key} data-phase={c.phase} aria-hidden={c.phase === 'leaving' || undefined}>
               <Clip>
                 <EventCard data-outcome={c.resolved ? c.outcome : 'pending'}>
-                  <EventMain>
-                    <EventCap>{c.event.capability}</EventCap>
-                    <EventTitle>{c.event.title}</EventTitle>
-                  </EventMain>
+                  <EventLead>
+                    <EventIcon aria-hidden="true"><CapIcon size={16} /></EventIcon>
+                    <EventMain>
+                      <EventCap>{c.event.capability}</EventCap>
+                      <EventTitle>{c.event.title}</EventTitle>
+                    </EventMain>
+                  </EventLead>
                   {/* Trailing identifier. While the card is coming in it shows an
                       animated 3-dot loader; once it moves up it resolves to one of
                       three: "No action needed", "Action required" (blue Pulse
                       mark), or the orange "Risk detected" Pulse mark. */}
                   <EventTrail>
                     {!c.resolved ? (
-                      <TrailDots role="status" aria-label="Analyzing"><span /><span /><span /></TrailDots>
+                      <AgentMark mark="magnetic2d" size={20} tone="auto" state="active" aria-label="Analyzing" />
                     ) : c.outcome === 'risk' ? (
                       <>
                         <AgentMark
                           mark="pulse"
-                          size={28}
+                          size={20}
                           tone="auto"
                           state="active"
                           color="var(--color-orange-content-tertiary)"
@@ -276,7 +310,7 @@ export function LiveLanding({ onDetectRisk }: LiveLandingProps) {
                       <>
                         <AgentMark
                           mark="pulse"
-                          size={28}
+                          size={20}
                           tone="auto"
                           state="active"
                           color="var(--color-blue-content-primary, var(--color-slate-content-secondary))"
@@ -292,7 +326,8 @@ export function LiveLanding({ onDetectRisk }: LiveLandingProps) {
                 </EventCard>
               </Clip>
             </Row>
-          ))}
+            );
+          })}
         </Feed>
       )}
     </Stage>
@@ -526,7 +561,28 @@ const EventCard = styled.div`
   }
 `;
 
-/* The card's left column — capability eyebrow over the event title. */
+/* The card's left group — the leading icon chip alongside the text column. */
+const EventLead = styled.div`
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+`;
+
+/* Leading 32px icon slot — a rounded chip holding the capability glyph. */
+const EventIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--space-8);
+  height: var(--space-8);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-tertiary);
+  color: var(--color-slate-content-tertiary);
+`;
+
+/* The card's text column — capability eyebrow over the event title. */
 const EventMain = styled.div`
   display: flex;
   flex-direction: column;
@@ -567,11 +623,11 @@ const TrailDots = styled.span`
 `;
 
 /* "Risk detected" — orange, beside the Pulse mark. The Pulse draws a small
-   core centred in a 28px canvas, so ~12px of dead space sits between the dot
+   core centred in a 20px canvas, so ~8px of dead space sits between the dot
    and the canvas edge; a negative margin crops it back so the visible gap from
    the dot to the label reads as the intended 8px. */
 const RiskLabel = styled.span`
-  margin-left: -12px;
+  margin-left: -9px;
   font-size: var(--text-xs);
   font-weight: var(--font-weight-medium);
   letter-spacing: var(--tracking-wide);
@@ -592,7 +648,7 @@ const NoActionLabel = styled.span`
    orange "Risk detected". The negative margin crops the Pulse canvas dead space
    so the gap to the label reads as the intended 8px (see RiskLabel). */
 const ActionLabel = styled.span`
-  margin-left: -12px;
+  margin-left: -9px;
   font-size: var(--text-xs);
   font-weight: var(--font-weight-medium);
   letter-spacing: var(--tracking-wide);
@@ -600,12 +656,11 @@ const ActionLabel = styled.span`
   white-space: nowrap;
 `;
 
-/* Capability eyebrow above the event title. */
+/* Capability eyebrow above the event title — sentence case. */
 const EventCap = styled.span`
   font-size: var(--text-xs);
   font-weight: var(--font-weight-medium);
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--color-slate-content-tertiary);
 `;
 

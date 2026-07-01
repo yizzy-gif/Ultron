@@ -736,7 +736,7 @@ export const WORKING_ACTIVITIES: Record<string, WorkingMilestone[]> = {
   shift_drop_maria: [
     { icon: 'send',  headline: 'Messaged the top replacements', detail: 'Pushed the full shift brief to the 20 best-matched RNs at once. This close to start time an urgent fill lands faster blasted in parallel than worked one name at a time, so I skipped the ranked one-by-one outreach.', bullets: ['Matched on ICU credential, distance from Riverside, and reliability score', 'All 20 reached on their preferred channel (SMS or in-app)', 'No bonus incentive attached yet — the qualified pool is deep enough to fill without it'], progress: ['Reaching out to Aisha Karim…', 'Reaching out to Renee Wallace…', 'Reached 9/20 matched RNs…', 'Reached 16/20 matched RNs…', 'Reached all 20 matched RNs'], avatars: ['aisha_karim', 'renee_wallace', 'carl_jensen', 'tina_boyd', 'marcus_idris'] },
     { icon: 'clock', headline: 'Collecting confirmations', detail: 'Watched the replies land and ran each one against the shift’s policy gates before locking anyone in, so the first yes I take is one that actually clears.', bullets: ['3 RNs replied in the first few minutes', 'Aisha Karim is the first clean yes — ICU-cleared, no overtime or double-booking conflict', 'Kept the other repliers warm as backup in case she falls through'], progress: ['Waiting on replies…', '3 RNs replied — checking fit…', 'Aisha Karim confirmed for the shift'], avatars: ['aisha_karim'] },
-    { icon: 'done',  headline: 'Shift filled', detail: 'Assigned Aisha to the 2:00–10:00 PM ICU shift and pushed the change everywhere it needs to land so the record stays honest.', bullets: ['Aisha Karim assigned · ICU credential re-checked at assignment', 'Calendar and her timesheet updated', 'Riverside’s scheduler notified the gap is closed'], progress: ['Assigning the 2:00 PM ICU shift…', 'Aisha Karim assigned · scheduler notified'] },
+    { icon: 'done',  headline: 'Shift filled', detail: 'Assigned Aisha to the 2:00–10:00 PM ICU shift and pushed the change everywhere it needs to land so the record stays honest.', bullets: ['Aisha Karim assigned · ICU credential re-checked at assignment', 'Calendar and her timesheet updated', 'Riverside’s scheduler notified the gap is closed'], progress: ['Assigning the 2:00 PM ICU shift…', 'Aisha Karim assigned · scheduler notified'], avatars: ['aisha_karim'], tools: ['policy', 'update'] },
     { icon: 'send',  headline: 'Notify the location manager', detail: 'Sent the Riverside location manager a heads-up on the reassignment so the floor lead has the change without needing to chase it — informational only, no action on their side.', bullets: ['Dana Brooks notified — Riverside location manager', 'Sent over push + email', 'Flagged as no action needed'], progress: ['Notifying the location manager…', 'Dana Brooks notified'], avatars: ['scheduler_dana'], tools: ['notify'] },
   ],
   timeoff_sofia: [
@@ -1413,7 +1413,7 @@ export function activityForThread(thread: ThreadItem): ActivityMilestone[] {
  *  data layer stays component-free. */
 export type UsageIconKey =
   | 'search' | 'message' | 'policy' | 'shield' | 'schedule'
-  | 'analytics' | 'clock' | 'monitor' | 'bell';
+  | 'analytics' | 'clock' | 'monitor' | 'bell' | 'record';
 
 /** One eligible worker the Policy Engine returned — surfaced as a ranked row in
  *  the Policy Engine detail (name + match score + distance from the site). */
@@ -1455,16 +1455,42 @@ export interface UsageNotification {
   message: string;
 }
 
+/** One key/value row in an UpdateData write — a field label and the value Ultron
+ *  wrote. `emphasis: 'success-tag'` promotes the value from plain text to a
+ *  success-toned Tag (e.g. the worker an open shift was finally assigned to). */
+export interface DetailRow {
+  label: string;
+  value: string;
+  emphasis?: 'success-tag';
+}
+
+/** A write Ultron committed to a Teambridge record — the resolution landing. The
+ *  record it wrote to (`recordType` is open-ended, not a fixed enum — Shift today,
+ *  any record tomorrow) plus the fields it set, rendered as a key/value list. */
+export interface UpdateDataResult {
+  recordType: 'Shift' | 'Worker' | 'Placement' | string;
+  fields: DetailRow[];
+}
+
 /** One tool Ultron drove on a step. Surfaced in the run-details drawer as a
  *  collapsible row (icon + name + description) that expands into a detail shaped to
- *  the tool: the Policy Engine shows the policies it evaluated and the eligible
- *  workers it returned; Engage shows either the message threads it opened (outreach)
- *  or a single recipient + message (a notification). Each detail section is
- *  optional, so an entry renders only the sections that apply to it. */
+ *  the step:
+ *   · Planning (the "Plan created and shared" beat) — the intended invocation as a
+ *     `query` block plus a `summary` of what it will return/do.
+ *   · Execution — what actually happened: the Policy Engine shows the policies it
+ *     evaluated and the eligible workers it returned; Engage shows either the message
+ *     threads it opened (outreach) or a single recipient + message (a notification).
+ *  Each detail section is optional, so an entry renders only the sections present. */
 export interface UsageEntry {
   name: string;
   description: string;
   icon: UsageIconKey;
+  /** Planning — the tool invocation Ultron will run, shown as a code block. */
+  query?: string;
+  /** Planning — a plain-language summary of what the invocation returns / will do. */
+  summary?: string;
+  /** Planning (notification) — the message body the notify will send. */
+  message?: string;
   /** Policy Engine — the policies it evaluated against (total count + the checked
    *  list shown). */
   policies?: { total: number; items: string[] };
@@ -1476,6 +1502,9 @@ export interface UsageEntry {
   threads?: { total: number; moreNoun: string; items: UsageThread[] };
   /** Engage (notification) — a single recipient + the message body sent. */
   notification?: UsageNotification;
+  /** Update Data — the write Ultron committed to a Teambridge record (the record
+   *  type + the fields it set). Present on the resolution step that lands the change. */
+  updateData?: UpdateDataResult;
 }
 
 /** The capabilities an activity drew on, as one flat list. A single scannable set
@@ -1484,11 +1513,17 @@ export interface UsageEntry {
  *  plausible, relevant set without per-milestone authoring. */
 export type ActivityUsage = UsageEntry[];
 
-/** A tool Ultron can drive on a step — the Policy Engine (eligibility + rules),
- *  Engage outreach (worker messaging), or an Engage notification (a one-way FYI to a
- *  single recipient). A step lists the kinds it drove; the detail for each is
- *  normalized to the case via THREAD_USAGE. */
-export type UsageToolKind = 'policy' | 'engage' | 'notify';
+/** A tool Ultron can drive on a step:
+ *   · `match` / `credential` / `incentive` — the read-only analysis sub-tools that
+ *     form the plan (rank a replacement pool, vet the top match, size an incentive).
+ *     Only present when the case actually matched a pool (policy.eligible).
+ *   · `policy` — the Policy Engine (eligibility + rules).
+ *   · `engage` — Engage outreach (worker messaging).
+ *   · `notify` — an Engage notification (a one-way FYI to a single recipient).
+ *   · `update` — an Update Data write (committing the resolution to a record).
+ *  A step lists the kinds it drove; the detail for each is normalized to the case
+ *  via THREAD_USAGE. */
+export type UsageToolKind = 'match' | 'policy' | 'credential' | 'incentive' | 'engage' | 'notify' | 'update';
 
 /* Compact constructors for the per-thread content below. */
 const cand = (name: string, match: string, distance: string): UsageCandidate => ({ name, match, distance });
@@ -1514,74 +1549,81 @@ interface ThreadUsageContext {
     policiesTotal: number;
     eligible?: { total: number; unit: string; moreNoun: string; items: UsageCandidate[] };
   };
-  engage?: { name: string; description: string; total: number; threads: UsageThread[] };
+  engage?: { name: string; description: string; message: string; total: number; threads: UsageThread[] };
   notify?: { description: string } & UsageNotification;
+  update?: { description: string } & UpdateDataResult;
 }
 
 const THREAD_USAGE: Record<string, ThreadUsageContext> = {
   shift_drop_maria: {
     policy: { description: 'Evaluated scheduling policies, returned eligible RNs', policies: RN_POLICIES, policiesTotal: 24,
       eligible: { total: 20, unit: 'eligible RNs', moreNoun: 'eligible candidates', items: [cand('Jordan Pierce', '4.9 match', '3.2 mi'), cand('Aisha Karim', '4.7 match', '5.1 mi'), cand('Marcus Lewis', '4.6 match', '6.8 mi')] } },
-    engage: { name: 'Engage: SMS', description: 'Sent the shift offer to 20 matched RNs', total: 20, threads: [thr('aisha_karim', 'Aisha Karim', '“Yes — I can take the 2pm.”', 'Interested', 'positive'), thr('jordan_pierce', 'Jordan Pierce', 'Delivered · no reply yet', 'Delivered', 'muted'), thr('marcus_lewis', 'Marcus Lewis', 'Delivered · no reply yet', 'Delivered', 'muted')] },
+    engage: { name: 'Engage: SMS', description: 'Sent the shift offer to 20 matched RNs', message: 'An ICU RN shift just opened at Riverside Clinic today at 2:00 PM. Reply YES to claim it — first to confirm takes the shift.', total: 20, threads: [thr('aisha_karim', 'Aisha Karim', '“Yes — I can take the 2pm.”', 'Interested', 'positive'), thr('jordan_pierce', 'Jordan Pierce', 'Delivered · no reply yet', 'Delivered', 'muted'), thr('marcus_lewis', 'Marcus Lewis', 'Delivered · no reply yet', 'Delivered', 'muted')] },
     notify: { description: 'Notified the Riverside location manager', seed: 'scheduler_dana', name: 'Dana Brooks', role: 'Location manager', channel: 'push + email', message: 'Heads up — the 2:00pm ICU shift was reassigned to Aisha Karim after Maria Ellis dropped it. No action needed.' },
+    update: { description: 'Wrote the assignment to the shift record', recordType: 'Shift', fields: [
+      { label: 'Shift', value: '2:00–10:00pm · ICU' },
+      { label: 'Date', value: 'Today' },
+      { label: 'Location', value: 'Riverside Clinic' },
+      { label: 'Assigned', value: 'Aisha Karim, RN', emphasis: 'success-tag' },
+    ] },
   },
   shift_release_jenny: {
     policy: { description: 'Evaluated scheduling policies, returned eligible caregivers', policies: CAREGIVER_POLICIES, policiesTotal: 22,
       eligible: { total: 5, unit: 'eligible caregivers', moreNoun: 'eligible caregivers', items: [cand('Renee Wallace', '4.9 match', '2.4 mi'), cand('Carl Jensen', '4.6 match', '4.1 mi'), cand('Tina Boyd', '4.4 match', '5.5 mi')] } },
-    engage: { name: 'Engage: SMS', description: 'Sent the shift offer to the qualified caregivers', total: 5, threads: [thr('renee_wallace', 'Renee Wallace', '“I can cover Lakeside.”', 'Interested', 'positive'), thr('carl_jensen', 'Carl Jensen', 'Delivered · no reply yet', 'Delivered', 'muted'), thr('tina_boyd', 'Tina Boyd', 'Delivered · no reply yet', 'Delivered', 'muted')] },
+    engage: { name: 'Engage: SMS', description: 'Sent the shift offer to the qualified caregivers', message: 'A caregiver shift at Lakeside just opened up. Reply YES to pick it up.', total: 5, threads: [thr('renee_wallace', 'Renee Wallace', '“I can cover Lakeside.”', 'Interested', 'positive'), thr('carl_jensen', 'Carl Jensen', 'Delivered · no reply yet', 'Delivered', 'muted'), thr('tina_boyd', 'Tina Boyd', 'Delivered · no reply yet', 'Delivered', 'muted')] },
   },
   new_shift_forklift: {
     policy: { description: 'Evaluated scheduling policies, returned eligible operators', policies: FORKLIFT_POLICIES, policiesTotal: 18,
       eligible: { total: 11, unit: 'eligible operators', moreNoun: 'eligible operators', items: [cand('Dane Mercer', '4.8 match', '2.1 mi'), cand('Omar Reyes', '4.6 match', '3.7 mi'), cand('Nina Patel', '4.5 match', '4.4 mi')] } },
-    engage: { name: 'Engage: SMS', description: 'Offered the shift to the top 12 operators', total: 12, threads: [thr('forklift_dane', 'Dane Mercer', '“Claiming Bay 4.”', 'Interested', 'positive'), thr('forklift_omar', 'Omar Reyes', 'Delivered · no reply yet', 'Delivered', 'muted'), thr('forklift_nina', 'Nina Patel', 'Delivered · no reply yet', 'Delivered', 'muted')] },
+    engage: { name: 'Engage: SMS', description: 'Offered the shift to the top 12 operators', message: 'A forklift operator shift is open at Bay 4. Reply YES to claim it.', total: 12, threads: [thr('forklift_dane', 'Dane Mercer', '“Claiming Bay 4.”', 'Interested', 'positive'), thr('forklift_omar', 'Omar Reyes', 'Delivered · no reply yet', 'Delivered', 'muted'), thr('forklift_nina', 'Nina Patel', 'Delivered · no reply yet', 'Delivered', 'muted')] },
   },
   job_event_staff: {
     policy: { description: 'Evaluated scheduling policies, returned eligible workers', policies: EVENT_POLICIES, policiesTotal: 16,
       eligible: { total: 54, unit: 'eligible workers', moreNoun: 'eligible workers', items: [cand('Jamal Carter', '4.7 match', '1.8 mi'), cand('Sara Lindqvist', '4.6 match', '2.9 mi'), cand('Dmitri Volkov', '4.5 match', '3.6 mi')] } },
-    engage: { name: 'Engage: SMS', description: 'Invited the top 40 matches to claim a slot', total: 40, threads: [thr('event_jamal', 'Jamal Carter', '“In — sign me up.”', 'Interested', 'positive'), thr('event_sara', 'Sara Lindqvist', '“Can do.”', 'Interested', 'positive'), thr('event_dmitri', 'Dmitri Volkov', 'Delivered · no reply yet', 'Delivered', 'muted')] },
+    engage: { name: 'Engage: SMS', description: 'Invited the top 40 matches to claim a slot', message: 'We’re staffing an upcoming event. Reply YES to claim a slot.', total: 40, threads: [thr('event_jamal', 'Jamal Carter', '“In — sign me up.”', 'Interested', 'positive'), thr('event_sara', 'Sara Lindqvist', '“Can do.”', 'Interested', 'positive'), thr('event_dmitri', 'Dmitri Volkov', 'Delivered · no reply yet', 'Delivered', 'muted')] },
   },
   thread_cancel_wed: {
     policy: { description: 'Evaluated scheduling policies, returned eligible workers', policies: ['Availability for Wed 7:00 AM', 'No overlapping shift', 'Site clearance for Pier 9', 'Rest window (≥ 8h between shifts)'], policiesTotal: 16,
       eligible: { total: 8, unit: 'eligible workers', moreNoun: 'eligible workers', items: [cand('Theo Park', '4.7 match', '1.9 mi'), cand('Gina Holt', '4.5 match', '3.3 mi'), cand('Renata Cruz', '4.4 match', '5.0 mi')] } },
-    engage: { name: 'Engage: SMS', description: 'Acknowledged her cancellation', total: 1, threads: [thr('thread_cancel_wed', 'Mara Lindgren', '“Thanks for understanding.”', 'Read', 'positive')] },
+    engage: { name: 'Engage: SMS', description: 'Acknowledged her cancellation', message: 'Thanks for letting us know — your Wed 7:00 AM shift has been released. No further action needed.', total: 1, threads: [thr('thread_cancel_wed', 'Mara Lindgren', '“Thanks for understanding.”', 'Read', 'positive')] },
   },
   cred_expired_nadia: {
     policy: { description: 'Evaluated credential policies, flagged the at-risk shifts', policies: ['Active CPR certification', 'Credential current for gated shifts', 'Coverage available for each gap'], policiesTotal: 12,
       eligible: { total: 6, unit: 'eligible backfills', moreNoun: 'eligible backfills', items: [cand('Carl Jensen', '4.7 match', '2.6 mi'), cand('Tina Boyd', '4.5 match', '3.9 mi'), cand('Marcus Idris', '4.4 match', '4.8 mi')] } },
-    engage: { name: 'Engage: SMS', description: 'Offered the 3 gated shifts to CPR-current workers', total: 6, threads: [thr('carl_jensen', 'Carl Jensen', '“Happy to pick one up.”', 'Interested', 'positive'), thr('tina_boyd', 'Tina Boyd', 'Delivered · no reply yet', 'Delivered', 'muted'), thr('marcus_idris', 'Marcus Idris', 'Delivered · no reply yet', 'Delivered', 'muted')] },
+    engage: { name: 'Engage: SMS', description: 'Offered the 3 gated shifts to CPR-current workers', message: 'A few CPR-gated shifts just opened up. Reply YES to pick one up.', total: 6, threads: [thr('carl_jensen', 'Carl Jensen', '“Happy to pick one up.”', 'Interested', 'positive'), thr('tina_boyd', 'Tina Boyd', 'Delivered · no reply yet', 'Delivered', 'muted'), thr('marcus_idris', 'Marcus Idris', 'Delivered · no reply yet', 'Delivered', 'muted')] },
   },
   timeoff_sofia: {
     policy: { description: 'Evaluated time-off policies, cleared the request', policies: ['PTO balance sufficient', 'No blackout period in the window', 'Coverage for the affected shifts', 'Notice period met'], policiesTotal: 9 },
-    engage: { name: 'Engage: in-app', description: 'Notified Sofia of the decision', total: 1, threads: [thr('timeoff_sofia', 'Sofia Marin', '“Thanks — understood.”', 'Read', 'positive')] },
+    engage: { name: 'Engage: in-app', description: 'Notified Sofia of the decision', message: 'Your time-off request has been approved. Enjoy the time off!', total: 1, threads: [thr('timeoff_sofia', 'Sofia Marin', '“Thanks — understood.”', 'Read', 'positive')] },
   },
   document_kenji: {
     policy: { description: 'Evaluated credential policies, verified compliance', policies: ['Recognized as a CPR certification', 'Name matches the profile', 'Credential currently valid', 'Expiry date captured'], policiesTotal: 6 },
   },
   application_priya: {
     policy: { description: 'Scored the application against the CNA role', policies: ['Active CNA license', 'Availability fits Night Shift', 'Within commute range', 'References on file'], policiesTotal: 12 },
-    engage: { name: 'Engage: in-app', description: 'Sent Priya a screening intro', total: 1, threads: [thr('application_priya', 'Priya Raman', '“Yes, still interested!”', 'Interested', 'positive')] },
+    engage: { name: 'Engage: in-app', description: 'Sent Priya a screening intro', message: 'Hi Priya — thanks for applying for the CNA Night Shift role. Still interested? Reply YES and we’ll set up a quick screen.', total: 1, threads: [thr('application_priya', 'Priya Raman', '“Yes, still interested!”', 'Interested', 'positive')] },
   },
   new_user_luis: {
-    engage: { name: 'Engage: in-app', description: 'Sent Luis a welcome', total: 1, threads: [thr('new_user_luis', 'Luis Mendez', '“Thanks — excited to start!”', 'Read', 'positive')] },
+    engage: { name: 'Engage: in-app', description: 'Sent Luis a welcome', message: 'Welcome to the team, Luis! Tap to finish setting up your profile.', total: 1, threads: [thr('new_user_luis', 'Luis Mendez', '“Thanks — excited to start!”', 'Read', 'positive')] },
   },
   missed_clockin_james: {
-    engage: { name: 'Engage: SMS', description: 'Texted James to check on the missed start', total: 1, threads: [thr('missed_clockin_james', 'James Okoro', '“On my way — 15 min out.”', 'Interested', 'positive')] },
+    engage: { name: 'Engage: SMS', description: 'Texted James to check on the missed start', message: 'Hi James — we didn’t see a clock-in for your 9:00 AM shift. Are you on your way?', total: 1, threads: [thr('missed_clockin_james', 'James Okoro', '“On my way — 15 min out.”', 'Interested', 'positive')] },
   },
   missed_clockout_bianca: {
-    engage: { name: 'Engage: SMS', description: 'Texted Bianca to confirm her end time', total: 1, threads: [thr('missed_clockout_bianca', 'Bianca Rossi', '“Left at 6:00 PM.”', 'Interested', 'positive')] },
+    engage: { name: 'Engage: SMS', description: 'Texted Bianca to confirm her end time', message: 'Hi Bianca — we didn’t get a clock-out for today. What time did you finish?', total: 1, threads: [thr('missed_clockout_bianca', 'Bianca Rossi', '“Left at 6:00 PM.”', 'Interested', 'positive')] },
   },
   birthday_tomas: {
-    engage: { name: 'Engage: in-app', description: 'Sent Tomas a birthday note', total: 1, threads: [thr('birthday_tomas', 'Tomas Greco', 'Delivered · birthday note', 'Delivered', 'muted')] },
+    engage: { name: 'Engage: in-app', description: 'Sent Tomas a birthday note', message: 'Happy birthday, Tomas! 🎉 Thanks for everything you do for the team.', total: 1, threads: [thr('birthday_tomas', 'Tomas Greco', 'Delivered · birthday note', 'Delivered', 'muted')] },
   },
   phone_aisha: {
-    engage: { name: 'Engage: SMS', description: 'Sent a verification ping to the new number', total: 1, threads: [thr('phone_aisha', 'Aisha Karim', '“Yep, this is my number.”', 'Interested', 'positive')] },
+    engage: { name: 'Engage: SMS', description: 'Sent a verification ping to the new number', message: 'Verifying your new number — reply YES to confirm this is you.', total: 1, threads: [thr('phone_aisha', 'Aisha Karim', '“Yep, this is my number.”', 'Interested', 'positive')] },
   },
   schedule_published: {
-    engage: { name: 'Engage', description: 'Asked the team to confirm next week’s shifts', total: 31, threads: [thr('sched_amy', 'Amy Cho', '“Confirmed for all four.”', 'Confirmed', 'positive'), thr('sched_ben', 'Ben Ruiz', 'Reminder sent · no reply yet', 'Delivered', 'muted'), thr('sched_chloe', 'Chloe Tan', 'Reminder sent · no reply yet', 'Delivered', 'muted')] },
+    engage: { name: 'Engage', description: 'Asked the team to confirm next week’s shifts', message: 'Next week’s schedule is published. Please review and confirm your shifts.', total: 31, threads: [thr('sched_amy', 'Amy Cho', '“Confirmed for all four.”', 'Confirmed', 'positive'), thr('sched_ben', 'Ben Ruiz', 'Reminder sent · no reply yet', 'Delivered', 'muted'), thr('sched_chloe', 'Chloe Tan', 'Reminder sent · no reply yet', 'Delivered', 'muted')] },
   },
   fill_confirmed_maria: {
     policy: { description: 'Re-checked Sarah against scheduling policies', policies: RN_POLICIES, policiesTotal: 24 },
-    engage: { name: 'Engage: in-app', description: 'Confirmed the fill with Sarah and the scheduler', total: 2, threads: [thr('sarah_quinn', 'Sarah Quinn', '“See you at the shift.”', 'Read', 'positive'), thr('scheduler_dana', 'Dana Cole', 'Delivered · coverage confirmed', 'Delivered', 'muted')] },
+    engage: { name: 'Engage: in-app', description: 'Confirmed the fill with Sarah and the scheduler', message: 'You’re confirmed for the shift — thanks for covering! See you there.', total: 2, threads: [thr('sarah_quinn', 'Sarah Quinn', '“See you at the shift.”', 'Read', 'positive'), thr('scheduler_dana', 'Dana Cole', 'Delivered · coverage confirmed', 'Delivered', 'muted')] },
   },
 };
 
@@ -1595,33 +1637,143 @@ const DEFAULT_TOOLS: Record<WorkingIcon, UsageToolKind[]> = {
   chart: ['policy'],
 };
 
-/** Builds one tool entry for a kind from a case's context, or null when the case
- *  didn't use that tool. */
-function usageEntry(kind: UsageToolKind, ctx: ThreadUsageContext): UsageEntry | null {
+/** How a step renders its tools: `planning` (the plan beat) shows the intended
+ *  invocation as a query + summary; `execution` shows what actually happened. */
+export type UsageMode = 'planning' | 'execution';
+
+/** The channel slug for an Engage entry's query, parsed from its display name
+ *  ("Engage: SMS" → "sms", "Engage: in-app" → "in_app"). */
+const engageChannel = (name: string): string =>
+  /in-app/i.test(name) ? 'in_app' : /sms/i.test(name) ? 'sms' : 'auto';
+
+/** Past-tense → base-verb map for the outreach descriptions, so the plan beat can
+ *  recast a "what happened" description ("Sent the offer…") as planned intent
+ *  ("Will send the offer…") — these messages are drafted in the plan, not yet fired. */
+const PLAN_VERB: Record<string, string> = {
+  Sent: 'send', Offered: 'offer', Invited: 'invite', Texted: 'text',
+  Acknowledged: 'acknowledge', Notified: 'notify', Asked: 'ask',
+  Confirmed: 'confirm', Messaged: 'message',
+};
+
+/** Recast an execution description as planned intent for the plan beat. Leaves the
+ *  string untouched if its leading verb isn't a known outreach past-tense. */
+const asPlanned = (desc: string): string => {
+  const [first, ...rest] = desc.split(' ');
+  const base = PLAN_VERB[first];
+  return base ? `Will ${base} ${rest.join(' ')}` : desc;
+};
+
+/** The planning-phase query + summary for a tool — the invocation Ultron will run
+ *  and a plain-language read of what it returns/does, synthesized from the case
+ *  context so it stays normalized per event. */
+function planDetail(kind: UsageToolKind, ctx: ThreadUsageContext): { query: string; summary: string } {
   if (kind === 'policy' && ctx.policy) {
-    return { icon: 'shield', name: 'Policy Engine', description: ctx.policy.description,
-      policies: { total: ctx.policy.policiesTotal, items: ctx.policy.policies },
-      eligible: ctx.policy.eligible };
+    const e = ctx.policy.eligible;
+    return {
+      query: 'policy.evaluate(shift=target, policies="active") → eligible[]',
+      summary: e
+        ? `Run the shift against ${ctx.policy.policiesTotal} active scheduling policies and return the ${e.total} ${e.unit}, ranked by match.`
+        : `Run the case against ${ctx.policy.policiesTotal} active policies to confirm it clears compliance before acting.`,
+    };
   }
   if (kind === 'engage' && ctx.engage) {
-    return { icon: 'message', name: ctx.engage.name, description: ctx.engage.description,
-      threads: { total: ctx.engage.total, moreNoun: 'threads', items: ctx.engage.threads } };
+    return {
+      query: `engage.send(channel="${engageChannel(ctx.engage.name)}", template="shift_offer", to=matched)`,
+      summary: `${asPlanned(ctx.engage.description)} — ${ctx.engage.total} ${ctx.engage.total === 1 ? 'recipient' : 'recipients'} on their preferred channel, with replies tracked as they land.`,
+    };
   }
   if (kind === 'notify' && ctx.notify) {
-    const { description, ...notification } = ctx.notify;
-    return { icon: 'bell', name: 'Engage: Notification', description, notification };
+    return {
+      query: `engage.notify(to="${ctx.notify.name}", via="${ctx.notify.channel.replace(/\s*\+\s*/g, '+')}")`,
+      summary: `${asPlanned(ctx.notify.description)} (${ctx.notify.name} · ${ctx.notify.channel}) — a one-way heads-up, no action required.`,
+    };
   }
-  return null;
+  return { query: '', summary: '' };
+}
+
+/** Builds one tool entry for a kind from a case's context, or null when the case
+ *  didn't use that tool. In `planning` mode the entry carries a query + summary
+ *  (the intended invocation); in `execution` mode it carries the tool-shaped detail
+ *  of what happened (policies/eligible, threads, or a notification). */
+function usageEntry(kind: UsageToolKind, ctx: ThreadUsageContext, mode: UsageMode): UsageEntry | null {
+  // Read-only analysis sub-tools of the replacement-matching flow — present only
+  // when the case actually matched a pool (policy.eligible). They're what produced
+  // the plan, so the content reads the same in the plan or a later recap.
+  if (kind === 'match' || kind === 'credential' || kind === 'incentive') {
+    const e = ctx.policy?.eligible;
+    if (!e) return null;
+    const role = e.unit.replace(/^eligible\s+/i, ''); // "eligible RNs" → "RNs"
+    if (kind === 'match') {
+      return {
+        icon: 'search', name: 'Match Engine',
+        description: `Ranked qualified ${role} by skill, location and availability`,
+        query: 'match_staff(pool="qualified") → ranked[]',
+        summary: `Ranked the qualified pool by skill, location, and availability — surfaced ${e.total} ${e.unit}.`,
+      };
+    }
+    if (kind === 'credential') {
+      return {
+        icon: 'monitor', name: 'Policy Engine',
+        description: 'Verified the top match’s license and certifications',
+        query: 'verify_credentials(candidate="top_match") → status[]',
+        summary: 'Confirmed the top match’s license and required certifications are active and current.',
+      };
+    }
+    // incentive
+    return {
+      icon: 'analytics', name: 'Match Engine',
+      description: 'Compared the fill against recent last-minute fills',
+      query: `recommend_incentive(pool_depth=${e.total}) → suggestion`,
+      summary: 'Compared against recent last-minute fills — the qualified pool is deep enough, so no bonus was attached.',
+    };
+  }
+
+  // The Update Data write — committing the resolution to a Teambridge record. Like
+  // the read-only analysis tools above, the write reads the same in the plan beat or
+  // a later recap, so it's mode-independent.
+  if (kind === 'update') {
+    if (!ctx.update) return null;
+    const { description, ...updateData } = ctx.update;
+    return { icon: 'record', name: 'Update Data', description, updateData };
+  }
+
+  const present = (kind === 'policy' && ctx.policy) || (kind === 'engage' && ctx.engage) || (kind === 'notify' && ctx.notify);
+  if (!present) return null;
+
+  const name = kind === 'policy' ? 'Policy Engine' : kind === 'notify' ? 'Engage: Notification' : ctx.engage!.name;
+  const description = kind === 'policy' ? ctx.policy!.description : kind === 'notify' ? ctx.notify!.description : ctx.engage!.description;
+  const icon: UsageIconKey = kind === 'policy' ? 'shield' : kind === 'notify' ? 'bell' : 'message';
+
+  if (mode === 'planning') {
+    // Outreach is drafted in the plan, not yet fired — recast its description as
+    // planned intent ("Will send…"). Policy analysis genuinely ran, so it stays.
+    const plannedDesc = kind === 'policy' ? description : asPlanned(description);
+    const planned = { icon, name, description: plannedDesc, ...planDetail(kind, ctx) };
+    // Messaging tools carry a concrete message body — surface it in the plan too.
+    if (kind === 'notify') return { ...planned, message: ctx.notify!.message };
+    if (kind === 'engage') return { ...planned, message: ctx.engage!.message };
+    return planned;
+  }
+  if (kind === 'policy') {
+    return { icon, name, description, policies: { total: ctx.policy!.policiesTotal, items: ctx.policy!.policies }, eligible: ctx.policy!.eligible };
+  }
+  if (kind === 'engage') {
+    return { icon, name, description, message: ctx.engage!.message, threads: { total: ctx.engage!.total, moreNoun: 'threads', items: ctx.engage!.threads } };
+  }
+  // notify
+  const { description: _d, ...notification } = ctx.notify!;
+  return { icon, name, description, notification };
 }
 
 /** The tools a step drove, with detail normalized to its case — the entries shown
  *  in that step's run-details drawer. `kinds` is the step's own selection (its
  *  `tools` override, else the per-icon default); each renders only if the case
- *  supplies that tool's context. Reasoning steps and tool-less cases yield []. */
-export function usageForThread(threadId: string, kinds: UsageToolKind[]): ActivityUsage {
+ *  supplies that tool's context. `mode` picks the plan (query + summary) vs the
+ *  execution (what happened) detail. Reasoning steps and tool-less cases yield []. */
+export function usageForThread(threadId: string, kinds: UsageToolKind[], mode: UsageMode = 'execution'): ActivityUsage {
   const ctx = THREAD_USAGE[threadId];
   if (!ctx) return [];
-  return kinds.map(k => usageEntry(k, ctx)).filter((e): e is UsageEntry => e !== null);
+  return kinds.map(k => usageEntry(k, ctx, mode)).filter((e): e is UsageEntry => e !== null);
 }
 
 /** The tool kinds a working step drove — its explicit `tools` override, else the

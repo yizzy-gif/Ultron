@@ -18,7 +18,7 @@ const isDetected = (t: ThreadItem) => t.id.startsWith('detected_');
 export const EXECUTION_ACTIVITIES = ['Thinking', 'Working', 'Processing'];
 // How long each activity is shown before advancing to the next. Paced slowly so
 // the work reads as real and the move through Live stream is clearly visible.
-export const ACTIVITY_STEP_MS = 2400;
+export const ACTIVITY_STEP_MS = 3600;
 // Extra beat on the final step before the thread flips to Resolved, so the last
 // milestone (e.g. "Coverage confirmed") is readable rather than flashing past.
 const END_PAD_MS = 1000;

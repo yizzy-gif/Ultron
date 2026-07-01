@@ -26,7 +26,7 @@ import {
   hasMultipleCtas, DO_IT_ALL_LABEL, AFFIRMATIVE_LABEL, deriveStepLabels,
 } from './ultronShared';
 import { ACTIVITY_STEP_MS } from './store';
-import { ActivityTrail, ActivityTrailCards, SessionActions, synthClock, Typewriter, revealFeedbackOnHover } from './ActivityTrail';
+import { ActivityTrail, ActivityTrailCards, SessionActions, synthClock, Typewriter, revealFeedbackOnHover, RunningLabel } from './ActivityTrail';
 import { AgentMark } from './AgentMark';
 
 /** How soon the first work step appears after the operator's reply — a short
@@ -298,6 +298,9 @@ export function UltronActionCard({ thread, stage, onAction, onRefinement, onSave
   // The resolution recap types out like an Ultron message; the offer/saved line and
   // its CTA hold until the recap finishes, so the turn reads as it being spoken.
   const [recapDone, setRecapDone] = useState(false);
+  // A conversational turn's button row only appears once its text has finished
+  // typing — so the actions land after Ultron has "said" the line, not alongside it.
+  const [lineDone, setLineDone] = useState(false);
   const { actionable, onFollowUp, prompt, records, primaryLabel, purple } = deriveCase(thread, stage);
 
   // Cases with a task breakdown render their plan as discrete step cards (the
@@ -344,19 +347,22 @@ export function UltronActionCard({ thread, stage, onAction, onRefinement, onSave
         {showOffer && (saved ? (
           // Deferred toggle path — saved inline, shown as part of this resolution turn.
           <>
-            <OfferLine><TypedText text="Workflow saved for future use. Click the link to see the details." /></OfferLine>
-            <Actions>
-              <Pill variant="tertiary" size="sm" trailingArtwork={<LinkExternal01Icon size={14} />} onClick={() => {}}>
-                View workflow
-              </Pill>
-            </Actions>
+            <OfferLine><TypedText text="Workflow saved for future use. Click the link to see the details." onDone={() => setLineDone(true)} /></OfferLine>
+            {lineDone && (
+              <Actions>
+                <Pill variant="tertiary" size="sm" trailingArtwork={<LinkExternal01Icon size={14} />} onClick={() => {}}>
+                  View workflow
+                </Pill>
+              </Actions>
+            )}
           </>
         ) : (
           <>
-            <OfferLine><TypedText text="Want me to save this as a reusable workflow?" /></OfferLine>
+            <OfferLine><TypedText text="Want me to save this as a reusable workflow?" onDone={() => setLineDone(true)} /></OfferLine>
             {/* Hidden once the operator clicks Save — the confirmation then reads as a
-                conversation (their "Save as workflow" bubble + Ultron's reply below). */}
-            {!savedConversationally && (
+                conversation (their "Save as workflow" bubble + Ultron's reply below).
+                Held until the question finishes typing so the CTA lands after it. */}
+            {!savedConversationally && lineDone && (
               <Actions>
                 {/* Low-emphasis peek at the play before committing it (demo affordance —
                     no standalone workflow preview surface yet). */}
@@ -385,20 +391,22 @@ export function UltronActionCard({ thread, stage, onAction, onRefinement, onSave
   if (actionable && onFollowUp) {
     return (
       <OfferTurn>
-        <OfferLine><TypedText text={prompt} /></OfferLine>
-        <Actions>
-          {primaryLabel && (
-            <Pill variant="primary" size="sm" onClick={() => trigger(AFFIRMATIVE_LABEL)}>
-              {AFFIRMATIVE_LABEL}
+        <OfferLine><TypedText text={prompt} onDone={() => setLineDone(true)} /></OfferLine>
+        {lineDone && (
+          <Actions>
+            {primaryLabel && (
+              <Pill variant="primary" size="sm" onClick={() => trigger(AFFIRMATIVE_LABEL)}>
+                {AFFIRMATIVE_LABEL}
+              </Pill>
+            )}
+            <Pill variant="tertiary" size="sm" onClick={() => onRefinement('No')}>
+              No
             </Pill>
-          )}
-          <Pill variant="tertiary" size="sm" onClick={() => onRefinement('No')}>
-            No
-          </Pill>
-          <OtherPill variant="tertiary" size="sm" onClick={() => onRefinement('Other')}>
-            Other
-          </OtherPill>
-        </Actions>
+            <OtherPill variant="tertiary" size="sm" onClick={() => onRefinement('Other')}>
+              Other
+            </OtherPill>
+          </Actions>
+        )}
       </OfferTurn>
     );
   }
@@ -649,9 +657,19 @@ function workingToMilestone(w: WorkingMilestone, threadId: string): ActivityMile
 /** Analyzing "thinking" steps carry a headline + detail; fold them into the
  *  accumulated trail as activity milestones so the analysis reads as part of the
  *  one event-activity stream (rather than a separate card above it). The detail
- *  rides along as the step's collapsible supplemental line (revealed per-step). */
-function analyzingToMilestone(s: AnalyzingStep): ActivityMilestone {
-  return { icon: s.icon, headline: s.headline, blocks: s.detail ? [{ text: s.detail }] : undefined };
+ *  rides along as the step's collapsible supplemental line (revealed per-step).
+ *  The closing "Plan created and shared" beat (icon 'done') surfaces the tools the
+ *  plan will draw on — the case's full toolkit (Policy Engine, Engage) — so the plan
+ *  carries the same run-details affordance as the executed steps; earlier thinking
+ *  beats carry none. */
+function analyzingToMilestone(s: AnalyzingStep, threadId: string): ActivityMilestone {
+  // The plan surfaces the full toolkit that produced it — the read-only analysis
+  // (match → policy → credential → incentive) plus the messaging it will run.
+  // usageForThread drops kinds the case didn't use, so simpler events show fewer.
+  const usage = s.icon === 'done'
+    ? usageForThread(threadId, ['match', 'policy', 'credential', 'incentive', 'engage', 'notify'], 'planning')
+    : undefined;
+  return { icon: s.icon, headline: s.headline, blocks: s.detail ? [{ text: s.detail }] : undefined, usage };
 }
 
 /** Build the chronological trail for a case. With no operator action yet (or a
@@ -669,7 +687,7 @@ function buildTrail(thread: ThreadItem, outbound: string[]): { items: TrailItem[
   // milestones, e.g. messaged matches / assigned / outcome). Thinking before
   // doing, so a resolved case reads think → plan → execute.
   const milestones = [
-    ...analyzingSteps(thread.id).map(analyzingToMilestone),
+    ...analyzingSteps(thread.id).map(s => analyzingToMilestone(s, thread.id)),
     ...eventMilestones.slice(0, eventCount),
   ];
   const reasoningCount = milestones.length;
@@ -805,6 +823,27 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
   let lastActsIdx = -1;
   groups.forEach((g, i) => { if (g.type === 'acts') lastActsIdx = i; });
 
+  // Full grouping over EVERY item (not just the revealed prefix), so a running
+  // group can render its complete run of steps up front — the reached step focused
+  // and the not-yet-reached steps as dimmed skeleton rows. Each non-activity item
+  // is its own group entry, exactly as in the revealed grouping above, so group
+  // indices line up between the two (revealed is a prefix of items).
+  const fullGroups: ({ type: 'acts'; milestones: ActivityMilestone[] } | { type: 'other' })[] = [];
+  for (const it of items) {
+    if (it.kind !== 'activity') { fullGroups.push({ type: 'other' }); continue; }
+    const lastFg = fullGroups[fullGroups.length - 1];
+    if (lastFg && lastFg.type === 'acts') lastFg.milestones.push(it.milestone);
+    else fullGroups.push({ type: 'acts', milestones: [it.milestone] });
+  }
+  // The last acts group in the FULL trail — the one Ultron actually runs. We gate
+  // "running" on this (not the last *revealed* acts group): right after the operator
+  // approves an action, the case flips to in_progress before the work steps have
+  // streamed in, so the reasoning group is momentarily the last *revealed* acts
+  // group. Keying off the full trail keeps that already-settled reasoning group from
+  // re-spinning its last step while the work group is still on its way in.
+  let fullLastActsIdx = -1;
+  fullGroups.forEach((g, i) => { if (g.type === 'acts') fullLastActsIdx = i; });
+
   // The activity wrapper shows only Ultron's activities (the "Thought for X" trails)
   // and the docked decision surface — no prose narration. Ultron's working/resting
   // presence is carried by the single foot mark above the composer (see footWorking
@@ -822,11 +861,18 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
     // — while Ultron is genuinely running it: the reasoning group during analysis,
     // and the latest work group while the case executes. It settles to "Thought
     // for X" once analysis concludes / the case resolves (or while it monitors).
-    const running = (analyzing || thread.status === 'in_progress') && gi === lastActsIdx;
+    const running = (analyzing || thread.status === 'in_progress') && gi === fullLastActsIdx;
+    // While running, hand the group its FULL run of steps so the whole list shows
+    // at once; the reveal count (g.milestones.length) becomes the focus index, so
+    // the reached step is focused and the steps past it render as dimmed skeletons.
+    const fg = fullGroups[gi];
+    const milestones = running && fg && fg.type === 'acts' ? fg.milestones : g.milestones;
+    const focusIndex = running ? g.milestones.length - 1 : undefined;
     return (
       <ActivityTrailCards
-        milestones={g.milestones}
-        typingIndex={gi === lastActsIdx && typingOn ? g.milestones.length - 1 : undefined}
+        milestones={milestones}
+        focusIndex={focusIndex}
+        typingIndex={gi === fullLastActsIdx && typingOn ? g.milestones.length - 1 : undefined}
         /* The latest activity group stays open; once a newer activity group follows
            (new work triggered), earlier ones auto-collapse to their "Thought for X"
            summary — one-way, so the operator can still reopen them. */
@@ -888,19 +934,42 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
     return -1;
   })();
 
+  // The feedback timestamp for a work/response unit — derived from its milestones.
+  const unitFeedbackTime = (u: RenderUnit): string => {
+    if (u.kind === 'acts') return synthClock((groups[u.gi] as { milestones: ActivityMilestone[] }).milestones);
+    if (u.kind === 'response') return synthClock(u.gi >= 0 ? (groups[u.gi] as { milestones: ActivityMilestone[] }).milestones : []);
+    return synthClock([]);
+  };
+
   return (
     <>
       {units.map((u, ui) => {
         // The pending decision anchors under the latest activity-bearing unit.
         const trailingCard = ui === lastActivityUnitIdx ? actionCard : null;
-        if (u.kind === 'question') return <UltronAskedQuestion key={`q${ui}`} text={u.text} />;
+        if (u.kind === 'question') {
+          // A work/response turn immediately above an (answered) follow-up question
+          // lifts its feedback row below the question, so the thumbs/rerun close out
+          // the whole turn (work + reply + the ask) instead of splitting the work
+          // from its ask. Mirrors the DecisionTurn lift used for the pending ask.
+          const prev = units[ui - 1];
+          const liftFeedback = !!prev && (prev.kind === 'acts' || prev.kind === 'response') && ui - 1 !== lastActivityUnitIdx;
+          if (!liftFeedback) return <UltronAskedQuestion key={`q${ui}`} text={u.text} />;
+          return (
+            <DecisionTurn key={`q${ui}`}>
+              <UltronAskedQuestion text={u.text} />
+              <SessionActions time={unitFeedbackTime(prev)} />
+            </DecisionTurn>
+          );
+        }
         if (u.kind === 'msg') return <UltronOutboundMessages key={`m${ui}`} messages={[u.text]} />;
         if (u.kind === 'acts') {
-          // When this group carries the trailing decision card, lift its feedback
-          // row below the card so the thumbs/rerun close out the whole turn (the
-          // reasoning + the ask) rather than splitting the two.
+          // When this group carries the trailing decision card — or sits just above
+          // an (answered) follow-up question — its feedback row is lifted below that
+          // ask (rendered by the DecisionTurn / question branch) so the thumbs/rerun
+          // close out the whole turn rather than splitting the work from its ask.
           const actsMilestones = (groups[u.gi] as { milestones: ActivityMilestone[] }).milestones;
-          const card = renderActivity(u.gi, false, !!trailingCard);
+          const liftToQuestion = units[ui + 1]?.kind === 'question';
+          const card = renderActivity(u.gi, false, !!trailingCard || liftToQuestion);
           return (
             <Fragment key={`a${ui}`}>
               {card}
@@ -922,10 +991,11 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
             <UltronResponse
               activity={hasWork ? renderActivity(u.gi, true) : undefined}
               text={u.text}
-              // When this set carries the trailing decision card, its feedback row
-              // lifts below the card (rendered after it) so the thumbs/rerun close
-              // out the whole turn rather than sitting above the next ask.
-              feedbackTime={trailingCard ? undefined : synthClock(workMilestones)}
+              // When this set carries the trailing decision card — or sits just above
+              // an (answered) follow-up question — its feedback row lifts below that
+              // ask (rendered by the DecisionTurn / question branch) so the thumbs/
+              // rerun close out the whole turn rather than sitting above the next ask.
+              feedbackTime={trailingCard || units[ui + 1]?.kind === 'question' ? undefined : synthClock(workMilestones)}
               // No inline mark — the thread's single presence lives in the foot slot
               // above the composer (see showFootMark).
               showMark={false}
@@ -961,9 +1031,14 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
                 <AgentMark mark="lines" size={30} tone="auto" state="active" coreHalo={false} aria-hidden="true" />
               </MarkLayer>
               <MarkLayer $show={!footWorking}>
-                <AgentMark mark="magnetic2d" size={24} tone="auto" state={footActive ? 'active' : 'idle'} coreHalo={false} aria-hidden="true" />
+                <AgentMark mark="magnetic2d" size={24} tone="auto" state={footActive ? 'active' : 'idle'} motionSpeed={2.5} coreHalo={false} aria-hidden="true" />
               </MarkLayer>
             </MarkMorph>
+            {/* Live progressing text beside the mark while Ultron is working —
+                the same Thinking → … → Crossing cadence as the session header. */}
+            {footWorking && (
+              <FootStatusText>{replying ? 'Replying…' : <RunningLabel />}</FootStatusText>
+            )}
           </ChatFootMark>
         ) : null,
         footSlot,
@@ -1517,6 +1592,9 @@ const WorkingMarkAbs = styled.span`
    Sits at the content-left edge, on the same rail as the thinking-stream marks. */
 const DemoTrigger = styled(Button)`
   align-self: flex-start;
+  border-radius: var(--radius-full);
+  padding-left: var(--space-3);
+  padding-right: var(--space-3);
 `;
 
 /* Vertical stack of context record cards (e.g. ranked candidate matches). */
@@ -1566,7 +1644,7 @@ const TaskRail = styled.div`
     top: 0;
     bottom: 0;
     width: 1.5px;
-    background: var(--color-border-opaque);
+    background: var(--color-slate-border-tertiary);
   }
   /* Clip the thread to the dot's centre (half the header height) at the ends. */
   &[data-first]::before { top: calc(${TASK_HEAD_H} / 2); }
@@ -1587,7 +1665,7 @@ const TaskDot = styled.span`
   height: var(--space-2);
   border-radius: var(--radius-full);
   background: var(--color-bg-primary);
-  border: 1.5px solid var(--color-content-tertiary);
+  border: 1.5px solid var(--color-slate-border-tertiary);
   box-shadow: 0 0 0 var(--space-2) var(--color-bg-primary);
 `;
 
@@ -1667,12 +1745,23 @@ const Prompt = styled.p`
   color: var(--color-content-primary);
 `;
 
+/* The button row pops in once its turn's text has finished typing — a soft fade +
+   slight rise and scale so the actions arrive as a considered beat after the line. */
+const actionsPop = keyframes`
+  from { opacity: 0; transform: translateY(var(--space-1)) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+`;
+
 const Actions = styled.div`
   display: flex;
   align-items: center;
   gap: var(--space-2);
   flex-wrap: wrap;
   margin-top: var(--space-1);
+  transform-origin: left center;
+  animation: ${actionsPop} var(--duration-slow) var(--ease-out);
+
+  @media (prefers-reduced-motion: reduce) { animation: none; }
 `;
 
 const Pill = styled(Button)`
@@ -1713,14 +1802,17 @@ const SaveWorkflowPill = styled(Button)<{ $trailing?: boolean }>`
      rhythm as the rest of the decision row. */
   padding-left: var(--space-3);
   padding-right: var(--space-3);
+  /* Default: a quiet outlined chip — the ghost fill plus a hairline opaque border
+     so the affordance reads as a bordered control even before it's toggled on. */
+  border: 1px solid var(--color-border-opaque);
 
-  /* Toggled on: a mono, outlined chip — white surface with a selected-border ring
-     (inset box-shadow so the ring doesn't shift the label), content in the primary
-     mono tone. The leading glyph swaps to a check in the markup. */
+  /* Toggled on: a mono, outlined chip — white surface with the border warming to
+     the selected ring (color-only change, so the label never shifts), content in
+     the primary mono tone. The leading glyph swaps to a check in the markup. */
   &[data-on] {
     background: var(--color-bg-primary);
     color: var(--color-content-primary);
-    box-shadow: inset 0 0 0 1px var(--color-border-selected);
+    border-color: var(--color-border-selected);
   }
 `;
 
@@ -1846,6 +1938,21 @@ const ChatFootMark = styled.span`
   padding-top: var(--space-1);
   /* Settles DOWN into place when it first appears above the composer. */
   animation: ${markDescend} 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
+
+  @media (prefers-reduced-motion: reduce) { animation: none; }
+`;
+
+/* Live progressing label beside the foot mark — muted, with a soft opacity blink
+   so it reads as active (mirrors the session header's running label). */
+const footStatusBlink = keyframes`
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+`;
+
+const FootStatusText = styled.span`
+  font-size: var(--text-sm);
+  color: var(--color-content-secondary);
+  animation: ${footStatusBlink} 1.1s ease-in-out infinite;
 
   @media (prefers-reduced-motion: reduce) { animation: none; }
 `;

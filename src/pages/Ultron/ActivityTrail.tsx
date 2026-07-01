@@ -38,7 +38,7 @@ export function ActivityTrail({ milestones }: { milestones: ActivityMilestone[] 
  *  below the last step and morphs it into the resting magnetic mark once the work
  *  is done; `collapsed` starts the session shut (used for reasoning the operator
  *  has already acted past — the active session streams open). */
-export function ActivityTrailCards({ milestones, typingIndex, focusIndex, collapsed, hideActions, running, animateIn }: {
+export function ActivityTrailCards({ milestones, typingIndex, focusIndex, collapsed, hideActions, running, animateIn, showConnectors }: {
   milestones: ActivityMilestone[];
   typingIndex?: number;
   /** While running, the index of the step Ultron is currently working. Every step
@@ -58,6 +58,11 @@ export function ActivityTrailCards({ milestones, typingIndex, focusIndex, collap
    *  into a response set after it already streamed in standalone, so the already-shown
    *  trail doesn't replay its entrance and blink. Defaults to true. */
   animateIn?: boolean;
+  /** Whether to draw the vertical connector between steps (and space the rows to
+   *  bridge it). The reasoning group (above) hides it and packs tight; the work
+   *  group (below) keeps it, since its line tracks the run's progress. Defaults to
+   *  true. */
+  showConnectors?: boolean;
 }) {
   return (
     <ActivitySession
@@ -68,11 +73,12 @@ export function ActivityTrailCards({ milestones, typingIndex, focusIndex, collap
       running={running}
       defaultCollapsed={collapsed}
       animateIn={animateIn}
+      showConnectors={showConnectors}
     />
   );
 }
 
-function ActivitySession({ milestones, typingIndex, focusIndex, hideActions, running, animateIn = true }: {
+function ActivitySession({ milestones, typingIndex, focusIndex, hideActions, running, animateIn = true, showConnectors = true }: {
   milestones: ActivityMilestone[];
   typingIndex?: number;
   focusIndex?: number;
@@ -82,6 +88,7 @@ function ActivitySession({ milestones, typingIndex, focusIndex, hideActions, run
    *  effect — every activity group stays fully expanded. */
   defaultCollapsed?: boolean;
   animateIn?: boolean;
+  showConnectors?: boolean;
 }) {
   // The group has no header — no "Thought for X" recap and no in-trail running label
   // (Ultron's live working status lives in the fixed presence mark above the composer,
@@ -111,15 +118,15 @@ function ActivitySession({ milestones, typingIndex, focusIndex, hideActions, run
                 : i === focusIndex - 1 ? 'working'  // this line draws into the currently-working step
                 : 'upcoming';                        // at/below the working step — not yet reached
             // Rows with a persistent sub-context line (a running/settled progress line)
-            // earn the generous inter-row gap so the heading + its sub-line read as one
-            // unit; a headline-only step (reasoning beats, collapsed accordions) has no
-            // sub-line, so it packs tighter against the next row. The connector below
-            // the row shortens to match.
+            // earn the larger inter-row gap so the heading + its sub-line read as one
+            // unit; a headline-only step has no sub-line, so it packs tighter. When the
+            // group draws no connector (the reasoning group above), the rows pack in
+            // closer still since there's no line to bridge.
             const hasSecondary = !!m.progress?.length;
             const isLast = i === milestones.length - 1;
             return (
-              <RowAnchor key={i} $tight={!hasSecondary} $last={isLast}>
-                {!isLast && <SessionConnector aria-hidden="true" $state={connectorState} $tight={!hasSecondary} />}
+              <RowAnchor key={i} $tight={!hasSecondary} $last={isLast} $connected={showConnectors}>
+                {showConnectors && !isLast && <SessionConnector aria-hidden="true" $state={connectorState} $tight={!hasSecondary} />}
                 <MilestoneContent
                   milestone={m}
                   last
@@ -481,9 +488,15 @@ function MilestoneProgress({ steps, avatars, avatarsOnSettle, reached, live, sho
   }, [i, last]);
 
   const done = i >= last;
+  // The green "settled" tone waits until the step is no longer live (focused) — the
+  // same moment the leading loader morphs into its checkmark — rather than the instant
+  // the beats reach the last line. While the step is still running (`live`), even its
+  // final beat stays muted, so the text greens in lockstep with the check rather than
+  // flipping green seconds ahead of it.
+  const settled = done && !live;
   return (
     <ProgressRow>
-      <ProgressLine key={i} $done={done} aria-live="polite">
+      <ProgressLine key={i} $done={settled} $live={live} aria-live="polite">
         {/* While live, each beat types itself out (no caret) as it lands, rather than
             popping in whole — so the running status reads as being written in real
             time. A settled/historical line shows its final text straight away. */}
@@ -587,12 +600,19 @@ const SessionBody = styled.div`
 `;
 
 /* Wraps each step (positioning context for its connector). Carries the inter-row
-   gap as a bottom margin: tight (space-3) for a headline-only step, generous
-   (space-5) once the step shows a sub-context line. The last row drops it. */
-const RowAnchor = styled.div<{ $tight?: boolean; $last?: boolean }>`
+   gap as a bottom margin. A connected group (the work group, which draws the vertical
+   line) spaces generously so the line bridges cleanly: space-3 headline-only, space-5
+   with a sub-context line. A group with no connector (the reasoning group above) packs
+   tight so the steps line up closely: space-1 / space-3. The last row drops it. */
+const RowAnchor = styled.div<{ $tight?: boolean; $last?: boolean; $connected?: boolean }>`
   min-width: 0;
   position: relative;
-  margin-bottom: ${p => (p.$last ? '0' : p.$tight ? 'var(--space-3)' : 'var(--space-5)')};
+  margin-bottom: ${p =>
+    p.$last
+      ? '0'
+      : p.$connected
+        ? (p.$tight ? 'var(--space-3)' : 'var(--space-5)')
+        : (p.$tight ? 'var(--space-1)' : 'var(--space-3)')};
 `;
 
 /* A bright segment sweeps top → bottom on a loop, reading as the connection being
@@ -602,9 +622,10 @@ const connectorDraw = keyframes`
   100% { background-position: 0 200%; }
 `;
 
-/* Vertical line linking one session step's leading icon to the next, running down
-   the icon column and bridging the inter-row gap. Inset top/bottom by space-1 for
-   breathing room. Its look tracks the work:
+/* Vertical line linking one work step's leading icon to the next, running down the
+   icon column and bridging the inter-row gap. Only the work group draws it (the
+   reasoning group above hides it). Inset top/bottom by space-1 for breathing room.
+   Its look tracks the work:
    · done     — a solid, full green (success) line, static (the draw motion lived
                 in the 'working' state; on completion the line just solidifies).
    · working  — a green (success) segment drawing top→bottom on a loop over a faint
@@ -615,8 +636,8 @@ const SessionConnector = styled.span<{ $state?: 'done' | 'working' | 'upcoming';
   /* Centered on the 32px icon column. */
   left: calc(var(--space-8) / 2);
   top: calc(var(--space-8) + var(--space-1));
-  /* Extend down across the inter-row gap — matched to this row's own gap (tight vs
-     generous) — stopping a touch short of the next step's icon so it reads as
+  /* Extend down across the inter-row gap — matched to this connected row's gap (tight
+     vs generous) — stopping a touch short of the next step's icon so it reads as
      connecting the two. */
   bottom: ${p => (p.$tight ? 'calc(var(--space-1) - var(--space-3))' : 'calc(var(--space-1) - var(--space-5))')};
   pointer-events: none;
@@ -644,10 +665,7 @@ const SessionConnector = styled.span<{ $state?: 'done' | 'working' | 'upcoming';
     : css`
         /* done — a full, solid green line. Static: the drawing motion belongs to
            the 'working' state (the looping sweep). Once the step completes, the
-           line simply solidifies rather than re-drawing from zero. Animating a
-           draw-on here replayed the fill every time a connector flipped
-           working→done (or re-mounted as the group settled), which read as the
-           line collapsing and redrawing after the checkmark morph — unstable. */
+           line simply solidifies rather than re-drawing from zero. */
         width: 1.5px;
         background-color: var(--color-success-content);
       `};
@@ -847,7 +865,10 @@ const StatusMark = styled.svg<{ $loading?: boolean }>`
     /* loading: leave ~30% of the circle drawn as the spinner arc */
     stroke-dashoffset: ${p => (p.$loading ? RING_C * 0.7 : 0)};
     stroke: ${p => (p.$loading ? 'var(--color-content-tertiary)' : 'var(--color-success-fill)')};
-    animation: ${spin} 0.75s linear infinite;
+    /* A slow, patient spin (2s/rev) — the work behind a step can take 10–20 min in
+       real life, so a calm rotation reads as steady progress rather than an
+       about-to-finish quick spinner. */
+    animation: ${spin} 2s linear infinite;
     /* Arc closes + fills on one eased settle curve (easeOutCubic) over the same
        duration, so the ring glides shut and colours in rather than braking abruptly. */
     transition:
@@ -956,9 +977,17 @@ const ProgressRow = styled.div`
   gap: var(--space-3);
 `;
 
+/* While a step is running, its status line breathes — a gentle opacity pulse that
+   signals live, in-flight work. It stops the instant the step settles (see $live
+   below), leaving the final result solid. */
+const progressBlink = keyframes`
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+`;
+
 /* The status line itself — Alloy paragraph / medium, in the muted content-tertiary
    tone for both the in-flight beats and the settled result. */
-const ProgressLine = styled.div<{ $done?: boolean }>`
+const ProgressLine = styled.div<{ $done?: boolean; $live?: boolean }>`
   flex: 1;
   min-width: 0;
   font-family: var(--font-sans);
@@ -971,7 +1000,12 @@ const ProgressLine = styled.div<{ $done?: boolean }>`
   color: ${p => (p.$done ? 'var(--color-success-content)' : 'var(--color-content-tertiary)')};
   /* The live reveal is carried by the type-on (see MilestoneProgress → Typewriter),
      so the line itself no longer fades/pops in — that avoided a stray flash when a
-     settled line re-mounts (e.g. as the finished group folds into a response set). */
+     settled line re-mounts (e.g. as the finished group folds into a response set).
+     While the step is still running it blinks to read as actively-working; a settled
+     line holds solid. */
+  ${p => p.$live && css`animation: ${progressBlink} 1.4s ease-in-out infinite;`}
+
+  @media (prefers-reduced-motion: reduce) { animation: none; }
 `;
 
 /* Trailing overlapping avatar cluster — the matched people the step reached. The
@@ -1040,6 +1074,9 @@ const Blocks = styled.div<{ $indent?: boolean }>`
   flex-direction: column;
   gap: var(--space-3);
   padding-top: var(--space-2);
+  /* Breathing room below the revealed sub-context so it doesn't butt against the
+     next step (the tighter headline-only gap leaves little room otherwise). */
+  padding-bottom: var(--space-2);
   /* Card layout: hang the sub-context under the title by clearing the inline
      icon column (icon width --space-8 + header gap --space-3). */
   padding-left: ${p => (p.$indent ? 'calc(var(--space-8) + var(--space-3))' : '0')};

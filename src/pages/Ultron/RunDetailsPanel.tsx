@@ -417,7 +417,7 @@ const DetailRows = styled(CandidateRows)`
     display: none;
   }
   & > div {
-    --li-py: var(--space-1);
+    --li-py: 0;
     --li-min-height: auto;
     min-height: 0;
   }

@@ -4,6 +4,7 @@
    preferences it applies when handling cases. DEMO ONLY — static content.
    ───────────────────────────────────────────────────────────────────────────── */
 
+import { useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { AgentMark } from './AgentMark';
 
@@ -22,6 +23,12 @@ const MEMORIES: Memory[] = [
 ];
 
 export function MemoryPage() {
+  // Filter the list by category. "All" shows everything; each tag narrows to its
+  // own memories. Derived from the data so a new tag automatically gets a pill.
+  const filters = useMemo(() => ['All', ...Array.from(new Set(MEMORIES.map(m => m.tag)))], []);
+  const [active, setActive] = useState('All');
+  const shown = active === 'All' ? MEMORIES : MEMORIES.filter(m => m.tag === active);
+
   return (
     <Page>
       <Column>
@@ -33,10 +40,24 @@ export function MemoryPage() {
           </HeaderText>
         </Header>
 
+        <FilterRow role="tablist" aria-label="Filter memories by category">
+          {filters.map(f => (
+            <FilterPill
+              key={f}
+              type="button"
+              role="tab"
+              aria-selected={active === f}
+              $active={active === f}
+              onClick={() => setActive(f)}
+            >
+              {f}
+            </FilterPill>
+          ))}
+        </FilterRow>
+
         <List>
-          {MEMORIES.map((m, i) => (
+          {shown.map((m, i) => (
             <Item key={i}>
-              <ItemTag>{m.tag}</ItemTag>
               <ItemBody>
                 <ItemTitle>{m.title}</ItemTitle>
                 <ItemDetail>{m.detail}</ItemDetail>
@@ -94,6 +115,35 @@ const Subtitle = styled.p`
   color: var(--color-content-tertiary);
 `;
 
+const FilterRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+`;
+
+/* A pill toggle for the category filter row. Inactive reads as a quiet chip (the
+   same slate wash as the per-card tag); the selected one fills solid so the active
+   filter is unmistakable. */
+const FilterPill = styled.button<{ $active?: boolean }>`
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid ${p => (p.$active ? 'var(--color-content-primary)' : 'var(--color-border-opaque)')};
+  border-radius: var(--radius-full);
+  background: ${p => (p.$active ? 'var(--color-content-primary)' : 'var(--color-bg-primary)')};
+  color: ${p => (p.$active ? 'var(--color-content-inverse)' : 'var(--color-content-secondary)')};
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: background var(--duration-fast, 120ms) var(--ease-out, ease),
+              border-color var(--duration-fast, 120ms) var(--ease-out, ease),
+              color var(--duration-fast, 120ms) var(--ease-out, ease);
+
+  &:hover {
+    border-color: ${p => (p.$active ? 'var(--color-content-primary)' : 'var(--color-content-tertiary)')};
+  }
+`;
+
 const List = styled.div`
   display: flex;
   flex-direction: column;
@@ -108,16 +158,6 @@ const Item = styled.div`
   border: 1px solid var(--color-border-opaque);
   border-radius: var(--radius-lg);
   background: var(--color-bg-primary);
-`;
-
-const ItemTag = styled.span`
-  flex-shrink: 0;
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-full);
-  background: var(--color-slate-bg-tertiary);
-  color: var(--color-content-secondary);
-  font-size: var(--text-xs);
-  font-weight: var(--font-weight-medium);
 `;
 
 const ItemBody = styled.div`

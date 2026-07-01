@@ -259,10 +259,14 @@ export function UltronCard({ thread, stage, expanded, detachActionable, detachAn
 /** Types a plain-text message out char-by-char, then settles to static text once
  *  finished (dropping the caret) — so every Ultron prose line in the thread reads as
  *  it's being spoken. `onDone` lets a turn reveal what follows it once the line lands. */
-function TypedText({ text, speed = 16, onDone }: { text: string; speed?: number; onDone?: () => void }) {
+function TypedText({ text, speed = 16, onDone, instant = false }: { text: string; speed?: number; onDone?: () => void; instant?: boolean }) {
   const [done, setDone] = useState(false);
   useEffect(() => { setDone(false); }, [text]);
-  if (done) return <>{text}</>;
+  // Pre-loaded (revisited) turn: show the whole line at once — no typewriter — and
+  // fire onDone so any gated follow-up (offer line, CTA) reveals immediately. Keeps a
+  // resolved case opened for review static instead of re-typing its text every visit.
+  useEffect(() => { if (instant) onDone?.(); }, [instant]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (instant || done) return <>{text}</>;
   return <Typewriter text={text} speed={speed} onDone={() => { setDone(true); onDone?.(); }} />;
 }
 
@@ -301,6 +305,13 @@ export function UltronActionCard({ thread, stage, onAction, onRefinement, onSave
   // A conversational turn's button row only appears once its text has finished
   // typing — so the actions land after Ultron has "said" the line, not alongside it.
   const [lineDone, setLineDone] = useState(false);
+  // A resolved case opened for review (Done section) mounts already settled — its
+  // recap + offer text are pre-loaded, so they show at once rather than re-typing on
+  // every visit. A case resolving live this mount was actionable at mount, so this
+  // stays false and the recap types out as it lands.
+  const [mountedSettled] = useState(() =>
+    ['resolved', 'auto_resolved', 'workflow_available', 'unresolved'].includes(thread.status),
+  );
   const { actionable, onFollowUp, prompt, records, primaryLabel, purple } = deriveCase(thread, stage);
 
   // Cases with a task breakdown render their plan as discrete step cards (the
@@ -341,13 +352,13 @@ export function UltronActionCard({ thread, stage, onAction, onRefinement, onSave
       <OfferTurn>
         {resolution && (
           <OfferLine>
-            <TypedText text={resolution} onDone={() => setRecapDone(true)} />
+            <TypedText text={resolution} onDone={() => setRecapDone(true)} instant={mountedSettled} />
           </OfferLine>
         )}
         {showOffer && (saved ? (
           // Deferred toggle path — saved inline, shown as part of this resolution turn.
           <>
-            <OfferLine><TypedText text="Workflow saved for future use. Click the link to see the details." onDone={() => setLineDone(true)} /></OfferLine>
+            <OfferLine><TypedText text="Workflow saved for future use. Click the link to see the details." onDone={() => setLineDone(true)} instant={mountedSettled} /></OfferLine>
             {lineDone && (
               <Actions>
                 <Pill variant="tertiary" size="sm" trailingArtwork={<LinkExternal01Icon size={14} />} onClick={() => {}}>
@@ -358,7 +369,7 @@ export function UltronActionCard({ thread, stage, onAction, onRefinement, onSave
           </>
         ) : (
           <>
-            <OfferLine><TypedText text="Want me to save this as a reusable workflow?" onDone={() => setLineDone(true)} /></OfferLine>
+            <OfferLine><TypedText text="Want me to save this as a reusable workflow?" onDone={() => setLineDone(true)} instant={mountedSettled} /></OfferLine>
             {/* Hidden once the operator clicks Save — the confirmation then reads as a
                 conversation (their "Save as workflow" bubble + Ultron's reply below).
                 Held until the question finishes typing so the CTA lands after it. */}
@@ -764,6 +775,15 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
   const [count, setCount] = useState(
     analyzing ? Math.min(1, reasoningCount) : liveOnMount ? reasoningCount : items.length,
   );
+  // Whether this thread mounted already terminal — a Done-section case opened for
+  // review. Its whole transcript is pre-loaded, so the trail's entrance fades, the
+  // answered-question settle, and the sent-bubble slide are all suppressed and it
+  // reads as static (no re-running the activity or text on open). Captured at mount:
+  // a case that resolves live during this mount was NOT terminal at mount, so it
+  // stays false and keeps animating as it settles.
+  const [settled] = useState(() =>
+    ['resolved', 'auto_resolved', 'workflow_available', 'unresolved'].includes(thread.status),
+  );
   // Once the operator has acted, every available entry (their message + the
   // resulting work) streams in; otherwise only the reasoning shows until the
   // case actually executes/resolves.
@@ -857,6 +877,13 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
   let fullLastActsIdx = -1;
   fullGroups.forEach((g, i) => { if (g.type === 'acts') fullLastActsIdx = i; });
 
+  // The first acts group is Ultron's reasoning (the thinking before the operator's
+  // decision); every acts group after it is executed work. The reasoning group hides
+  // its inter-step connector line (and packs tight); the work groups keep the line,
+  // since it tracks the run's progress. This is what distinguishes the group "above"
+  // (reasoning) from the one "below" (work).
+  const firstActsIdx = groups.findIndex(g => g.type === 'acts');
+
   // The activity wrapper shows only Ultron's activities (the "Thought for X" trails)
   // and the docked decision surface — no prose narration. Ultron's working/resting
   // presence is carried by the single foot mark above the composer (see footWorking
@@ -892,10 +919,15 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
         collapsed={gi < lastActsIdx}
         hideActions={hideActions}
         running={running}
+        /* The reasoning group (the first acts group) hides the vertical connector and
+           packs its steps tight; every later work group keeps the connector, whose
+           line tracks the run's progress. */
+        showConnectors={gi !== firstActsIdx}
         /* In a response set the group has already streamed in standalone — it's
            merely folding into the set, so suppress its entrance animation (it would
-           otherwise replay and blink the already-shown trail). */
-        animateIn={!inResponse}
+           otherwise replay and blink the already-shown trail). A settled (Done)
+           mount also skips it, so the pre-loaded trail doesn't fade in on open. */
+        animateIn={!inResponse && !settled}
       />
     );
   };
@@ -966,15 +998,19 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
           // from its ask. Mirrors the DecisionTurn lift used for the pending ask.
           const prev = units[ui - 1];
           const liftFeedback = !!prev && (prev.kind === 'acts' || prev.kind === 'response') && ui - 1 !== lastActivityUnitIdx;
-          if (!liftFeedback) return <UltronAskedQuestion key={`q${ui}`} text={u.text} />;
+          // Always render inside the (display:contents, layout-neutral) DecisionTurn
+          // wrapper, toggling only the lifted feedback row inside it. Swapping the
+          // wrapper as work streams in (standalone <p> → DecisionTurn-wrapped) would
+          // remount the question line at the same key and replay its entrance — the
+          // stray second pop-in. Keeping the wrapper stable animates it exactly once.
           return (
             <DecisionTurn key={`q${ui}`}>
-              <UltronAskedQuestion text={u.text} />
-              <SessionActions time={unitFeedbackTime(prev)} />
+              <UltronAskedQuestion text={u.text} animate={!settled} />
+              {liftFeedback && <SessionActions time={unitFeedbackTime(prev)} />}
             </DecisionTurn>
           );
         }
-        if (u.kind === 'msg') return <UltronOutboundMessages key={`m${ui}`} messages={[u.text]} />;
+        if (u.kind === 'msg') return <UltronOutboundMessages key={`m${ui}`} messages={[u.text]} animate={!settled} />;
         if (u.kind === 'acts') {
           // When this group carries the trailing decision card — or sits just above
           // an (answered) follow-up question — its feedback row is lifted below that
@@ -1256,21 +1292,21 @@ function WorkflowSavedReply() {
 // the interactive card (plan steps + CTAs) gives way to just the question Ultron
 // asked — left in the thread, above the operator's reply, so the resolved
 // conversation keeps the context of what was being decided.
-function UltronAskedQuestion({ text }: { text: string }) {
-  return <AskedQuestion>{text}</AskedQuestion>;
+function UltronAskedQuestion({ text, animate = true }: { text: string; animate?: boolean }) {
+  return <AskedQuestion $animate={animate}>{text}</AskedQuestion>;
 }
 
 // Outbound messages — the operator's replies in the thread. Each label the user
 // approved from the prompt card lands here as a right-aligned sent bubble,
 // placed directly under the existing activities so the middle space reads as a
 // conversation between the operator and Ultron.
-export function UltronOutboundMessages({ messages }: { messages: string[] }) {
+export function UltronOutboundMessages({ messages, animate = true }: { messages: string[]; animate?: boolean }) {
   if (!messages.length) return null;
   return (
     <OutboundList>
       {messages.map((text, i) => (
         <OutboundRow key={i}>
-          <OutboundBubble>
+          <OutboundBubble $animate={animate}>
             <OutboundText>{text}</OutboundText>
           </OutboundBubble>
         </OutboundRow>
@@ -1852,10 +1888,20 @@ const OfferLine = styled.p`
   color: var(--color-content-primary);
 `;
 
+/* As the operator answers, the bordered decision card is replaced by this plain
+   question line. It eases in — a soft fade + small upward settle — so the swap
+   from card to text reads as the card relaxing into the transcript rather than a
+   hard cut. Same easing/timing as the sent bubble below it, so the answered
+   question and the operator's reply glide in together. */
+const questionSettle = keyframes`
+  from { opacity: 0; transform: translateY(var(--space-2)); }
+  to   { opacity: 1; transform: translateY(0); }
+`;
+
 /* The answered prompt's residual question text — left-aligned (Ultron's voice) as
    plain inbound prose, matching the plan/inbound text that follows (no bubble
    chrome) so the resolved thread reads as a continuous transcript. */
-const AskedQuestion = styled.p`
+const AskedQuestion = styled.p<{ $animate?: boolean }>`
   max-width: 80%;
   margin: 0;
   font-family: var(--font-sans);
@@ -1863,6 +1909,11 @@ const AskedQuestion = styled.p`
   line-height: var(--line-height-relaxed);
   letter-spacing: var(--tracking-normal);
   color: var(--color-content-primary);
+  animation: ${questionSettle} 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* A pre-loaded (Done) mount shows the answered question in place, no settle. */
+  ${p => p.$animate === false && 'animation: none;'}
+
+  @media (prefers-reduced-motion: reduce) { animation: none; }
 `;
 
 /* Outbound (sent) messages — right-aligned chat bubbles, stacked below the
@@ -1903,7 +1954,7 @@ const contentFollow = keyframes`
 `;
 
 /* Dark inverse fill, right side — the operator's voice in the thread. */
-const OutboundBubble = styled.div`
+const OutboundBubble = styled.div<{ $animate?: boolean }>`
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -1912,6 +1963,8 @@ const OutboundBubble = styled.div`
   background: var(--color-bg-secondary);
   border-radius: 16px;
   animation: ${bubbleIn} 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* A pre-loaded (Done) mount shows the sent bubble in place, no slide-in. */
+  ${p => p.$animate === false && 'animation: none;'}
 
   @media (prefers-reduced-motion: reduce) { animation: none; }
 `;

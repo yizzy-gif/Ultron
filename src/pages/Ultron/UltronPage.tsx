@@ -502,7 +502,10 @@ const FootMarkSlot = styled.div`
 const Feed = styled.div`
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  /* Inter-group spacing — the gap between conversation turns (event card, activity
+     trail, sent bubbles, offer). Kept tight (space-2) so the thread reads as one
+     continuous conversation rather than widely-spaced blocks. */
+  gap: var(--space-2);
   width: 100%;
   max-width: 720px;
   margin: 0 auto;

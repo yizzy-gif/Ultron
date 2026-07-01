@@ -9,7 +9,7 @@ import {
 } from './components/PrimaryNav/NavIcons';
 import {
   SettingsGearIcon, CheckCircleIcon,
-  Badge, AlertTriangleIcon, Save01Icon,
+  Badge, AlertTriangleIcon, Save01Icon, Tooltip,
 } from 'alloy-design-system';
 import { HeadingText } from './components/TopNav/TopNav.styles';
 import policyActiveUrl from './assets/policy-icon-active.svg';
@@ -89,7 +89,7 @@ const savedPop = keyframes`
    tone — a highlight beat that draws the eye to the newly-saved row. */
 const savedGlow = keyframes`
   0%, 55% { color: var(--color-success-content); }
-  100%    { color: var(--color-content-tertiary); }
+  100%    { color: var(--color-content-disabled); }
 `;
 
 /* A green halo ripples outward from behind the glyph as it pops, then fades —
@@ -111,7 +111,7 @@ const SavedWorkflowMark = styled.span`
   flex-shrink: 0;
   width: var(--space-8);
   height: var(--space-8);
-  color: var(--color-content-tertiary);
+  color: var(--color-content-disabled);
 
   & svg {
     width: 16px;
@@ -281,7 +281,11 @@ export default function App() {
               // row carries a trailing automation glyph so the saved state is legible
               // from the list without opening the case.
               trailingSlot: ultron.savedWorkflowIds.includes(t.id)
-                ? <SavedWorkflowMark aria-label="Saved as workflow" title="Saved as workflow"><AutomationIcon /></SavedWorkflowMark>
+                ? (
+                    <Tooltip content="Saved as workflow" placement="top">
+                      <SavedWorkflowMark aria-label="Saved as workflow"><AutomationIcon /></SavedWorkflowMark>
+                    </Tooltip>
+                  )
                 : undefined,
             })),
           },

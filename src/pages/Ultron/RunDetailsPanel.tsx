@@ -20,8 +20,8 @@ import styled from 'styled-components';
 import {
   Accordion, AccordionItem, Avatar, ListItem, StatusTag, Eyebrow, Button,
   XCloseIcon, ChevronRightIcon, CheckCircleIcon, CheckIcon, Users03Icon, ClipboardCheckIcon,
-  CheckVerified01Icon, CurrencyDollarIcon, MessageCircle02Icon, Bell01Icon,
-  TriangleUpIcon, File04Icon,
+  CheckVerified01Icon, CurrencyDollarIcon, MessageCircle02Icon,
+  TriangleUpIcon, File04Icon, LinkExternal01Icon,
 } from 'alloy-design-system';
 import { avatarUrl } from './fixtures';
 import type {
@@ -42,7 +42,8 @@ const USAGE_ICON: Record<UsageIconKey, IconCmp> = {
   analytics: CurrencyDollarIcon,
   clock: CheckCircleIcon,
   monitor: CheckVerified01Icon,
-  bell: Bell01Icon,
+  /* Engage notification — a chat glyph (matches the Engage outreach section). */
+  bell: MessageCircle02Icon,
   record: File04Icon,
 };
 
@@ -53,12 +54,12 @@ const isPolicy = (e: UsageEntry): boolean => e.icon === 'shield' || e.icon === '
  *  shows as the "Tool used" tag). Keyed by the entry's glyph. */
 const SECTION_TITLE: Partial<Record<UsageIconKey, string>> = {
   search: 'Replacement match',
-  shield: 'Policy check',
-  policy: 'Policy check',
+  shield: 'Policy Engine',
+  policy: 'Policy Engine',
   monitor: 'Credential check',
   analytics: 'Incentive recommendation',
-  message: 'Staff messaging',
-  bell: 'Staff messaging',
+  message: 'Engage',
+  bell: 'Engage',
 };
 const titleFor = (e: UsageEntry): string =>
   // The Update Data write qualifies its title with the record type it wrote
@@ -101,13 +102,23 @@ const RunItem = styled(AccordionItem)`
   }
   & [class*='_description_'] {
     color: var(--color-content-disabled);
+    /* Alloy clamps the description to a single line (white-space: nowrap +
+       ellipsis). Let it wrap and clamp at two lines instead, so a collapsed
+       section surfaces more of its context before truncating. */
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
   }
   /* 12px gap between the leading avatar tile and the label/description block. */
   & [class*='_headerContent_'] {
     gap: var(--space-3);
   }
   & [role='region'] > div > div {
-    /* 12px gutter + 32px avatar tile + 12px gap — aligns the detail under the title. */
+    /* 12px gutter + 32px avatar tile + 12px gap — aligns the expanded body (its
+       heading label and cards) under the section title rather than the row edge. */
     padding-left: calc(var(--space-3) + var(--space-8) + var(--space-3));
     padding-right: var(--space-3);
   }
@@ -268,6 +279,16 @@ function EntryResult({ entry }: { entry: UsageEntry }) {
                 leadingSlot={<Avatar size="sm" src={avatarUrl(entry.notification.seed)} name={entry.notification.name} alt="" style={{ ['--avatar-bg' as never]: 'var(--color-bg-secondary)' }} />}
                 label={entry.notification.name}
                 description={`${entry.notification.role} · ${entry.notification.channel}`}
+                trailingSlot={
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    iconOnly
+                    aria-label={`Open ${entry.notification.name}'s profile`}
+                  >
+                    <LinkExternal01Icon size={14} />
+                  </Button>
+                }
               />
             </RecipientCard>
           </Field>
@@ -288,7 +309,15 @@ function EntryResult({ entry }: { entry: UsageEntry }) {
                 size="sm"
                 label={row.label}
                 trailingSlot={
-                  row.emphasis === 'success-tag'
+                  row.emphasis === 'change' && row.previousValue
+                    ? (
+                        <ChangeValue>
+                          <DroppedValue>{row.previousValue}</DroppedValue>
+                          <ChangeArrow aria-hidden="true">→</ChangeArrow>
+                          <FilledValue>{row.value}</FilledValue>
+                        </ChangeValue>
+                      )
+                    : row.emphasis === 'success-tag'
                     ? <StatusTag status="success" size="sm">{row.value}</StatusTag>
                     : <DetailValue>{row.value}</DetailValue>
                 }
@@ -350,9 +379,21 @@ const CandidateRows = styled.div`
     --li-px: var(--space-3);
     /* Names use the Label/sm type size. */
     --li-label-size: var(--text-xs);
+    /* Draw the row divider inset 12px from each edge (aligned with the row's
+       content padding) rather than the default full-width border. */
+    position: relative;
+    border-bottom-color: transparent;
   }
-  & > div:last-child {
-    border-bottom: none;
+  & > div::after {
+    content: '';
+    position: absolute;
+    left: var(--space-3);
+    right: var(--space-3);
+    bottom: 0;
+    border-bottom: 1px solid var(--color-border-opaque);
+  }
+  & > div:last-child::after {
+    display: none;
   }
 `;
 
@@ -361,8 +402,24 @@ const CandidateRows = styled.div`
    the value carries the emphasis on the right (DetailValue, or a success StatusTag
    for an emphasized row). */
 const DetailRows = styled(CandidateRows)`
+  /* 8px of breathing room inside the card's top/bottom edges — the rows themselves
+     stay tight (see --li-py below), so the padding sits on the card, not each row. */
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+
   & [class*='_label_'] {
     color: var(--color-content-tertiary);
+  }
+  /* Condensed key/value block — no inter-row dividers, and the rows shed their
+     48/36px min-height so each collapses to just its content plus a tight vertical
+     pad, removing the extra height and inter-row gaps. */
+  & > div::after {
+    display: none;
+  }
+  & > div {
+    --li-py: var(--space-1);
+    --li-min-height: auto;
+    min-height: 0;
   }
 `;
 
@@ -373,6 +430,31 @@ const DetailValue = styled.span`
   font-weight: var(--font-weight-medium);
   color: var(--color-content-primary);
   text-align: right;
+`;
+
+/* A field REPLACEMENT value — the dropped value struck through, then the new value
+   in success green, reading as "was → now". Plain text (no tag), right-aligned. */
+const ChangeValue = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+`;
+
+const DroppedValue = styled.span`
+  color: var(--color-content-disabled);
+  text-decoration: line-through;
+`;
+
+const ChangeArrow = styled.span`
+  color: var(--color-content-tertiary);
+`;
+
+const FilledValue = styled.span`
+  color: var(--color-success-content);
 `;
 
 /* Synthesize an overflow candidate row. Fixtures only ship the top 3 ranked
@@ -461,7 +543,7 @@ const Scrim = styled.div`
 
 const Panel = styled.div`
   position: relative;
-  width: min(380px, 90vw);
+  width: min(460px, 92vw);
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -565,6 +647,12 @@ const ThreadTrailing = styled.div`
   align-items: center;
   gap: var(--space-2);
   color: var(--color-content-tertiary);
+
+  /* Lighter drill-down chevron — a step muted below the status tag so it reads as
+     quiet affordance rather than competing with the tag. */
+  & svg {
+    color: var(--color-content-disabled);
+  }
 `;
 
 const MoreButton = styled.button`
@@ -592,21 +680,38 @@ const MoreButton = styled.button`
   }
 `;
 
+/* The evaluated policies as a bordered card — matching the eligible-candidate /
+   thread cards below (see CandidateRows): each row insets its divider 12px from
+   each edge, and the last row drops its divider so it doesn't double the border. */
 const PolicyList = styled.ul`
   margin: 0;
   padding: 0;
   list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  border: 1px solid var(--color-border-opaque);
+  border-radius: 6px;
 `;
 
 const PolicyRow = styled.li`
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  /* Condensed 36px rows — a fixed height with horizontal-only padding, so the
+     list reads tighter than the default 12px-all-around row. */
+  height: 36px;
+  padding: 0 var(--space-3);
+  box-sizing: border-box;
   font-size: var(--text-sm);
   color: var(--color-content-primary);
+
+  &:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: var(--space-3);
+    right: var(--space-3);
+    bottom: 0;
+    border-bottom: 1px solid var(--color-border-opaque);
+  }
 `;
 
 const PolicyCheck = styled.span`

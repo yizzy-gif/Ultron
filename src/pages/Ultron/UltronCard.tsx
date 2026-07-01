@@ -351,7 +351,7 @@ export function UltronActionCard({ thread, stage, onAction, onRefinement, onSave
             {lineDone && (
               <Actions>
                 <Pill variant="tertiary" size="sm" trailingArtwork={<LinkExternal01Icon size={14} />} onClick={() => {}}>
-                  View workflow
+                  View saved workflow
                 </Pill>
               </Actions>
             )}
@@ -651,7 +651,7 @@ type TrailItem =
  *  Each step carries the tools it drove, with detail normalized to this case's
  *  context (its role, people, channel, counts) — see usageForThread. */
 function workingToMilestone(w: WorkingMilestone, threadId: string): ActivityMilestone {
-  return { icon: w.icon, headline: w.headline, blocks: (w.detail || w.bullets) ? [{ text: w.detail || undefined, bullets: w.bullets }] : undefined, progress: w.progress, avatars: w.avatars, usage: usageForThread(threadId, stepTools(w)) };
+  return { icon: w.icon, headline: w.headline, blocks: (w.detail || w.bullets) ? [{ text: w.detail || undefined, bullets: w.bullets }] : undefined, progress: w.progress, avatars: w.avatars, avatarsOnSettle: w.avatarsOnSettle, reached: w.reached, usage: usageForThread(threadId, stepTools(w)) };
 }
 
 /** Analyzing "thinking" steps carry a headline + detail; fold them into the
@@ -750,7 +750,20 @@ export function UltronActivityCards({ thread, outbound = [], chat = [], replying
   // clearing and re-growing the trail from scratch. While analyzing, it streams
   // the reasoning in from the first step (so the group runs live, like Ultron
   // thinking) rather than appearing all at once.
-  const [count, setCount] = useState(analyzing ? Math.min(1, reasoningCount) : reasoningCount);
+  //
+  // A case that mounts already in a live phase streams: analyzing reveals the
+  // reasoning from the first step; an in-progress case reveals its work from the
+  // reasoning onward. But a case that mounts already settled — resolved,
+  // auto-resolved, monitoring's completed trail, or any terminal Done state —
+  // must open FULLY REVEALED (count = items.length), not re-stream. Otherwise
+  // navigating (back) to a Done event re-runs its post-action work every time:
+  // its full trail (operator message → work → reply) outruns reasoningCount, so
+  // the reveal timer would replay all of it. Only analyzing / in-progress are
+  // genuinely live on mount; everything else is static.
+  const liveOnMount = analyzing || thread.status === 'in_progress';
+  const [count, setCount] = useState(
+    analyzing ? Math.min(1, reasoningCount) : liveOnMount ? reasoningCount : items.length,
+  );
   // Once the operator has acted, every available entry (their message + the
   // resulting work) streams in; otherwise only the reasoning shows until the
   // case actually executes/resolves.
@@ -1231,7 +1244,7 @@ function WorkflowSavedReply() {
       <OfferLine><TypedText text="Workflow saved for future use. Click the link to see the details." /></OfferLine>
       <Actions>
         <Pill variant="tertiary" size="sm" trailingArtwork={<LinkExternal01Icon size={14} />} onClick={() => {}}>
-          View workflow
+          View saved workflow
         </Pill>
       </Actions>
     </>
@@ -1745,11 +1758,12 @@ const Prompt = styled.p`
   color: var(--color-content-primary);
 `;
 
-/* The button row pops in once its turn's text has finished typing — a soft fade +
-   slight rise and scale so the actions arrive as a considered beat after the line. */
+/* The button row eases in once its turn's text has finished typing — a soft fade
+   with just a hair of rise (no scale), so the actions settle in quietly rather than
+   popping. */
 const actionsPop = keyframes`
-  from { opacity: 0; transform: translateY(var(--space-1)) scale(0.97); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
 `;
 
 const Actions = styled.div`

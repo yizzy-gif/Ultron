@@ -18,7 +18,7 @@ const isDetected = (t: ThreadItem) => t.id.startsWith('detected_');
 export const EXECUTION_ACTIVITIES = ['Thinking', 'Working', 'Processing'];
 // How long each activity is shown before advancing to the next. Paced slowly so
 // the work reads as real and the move through Live stream is clearly visible.
-export const ACTIVITY_STEP_MS = 3600;
+export const ACTIVITY_STEP_MS = 5400;
 // Extra beat on the final step before the thread flips to Resolved, so the last
 // milestone (e.g. "Coverage confirmed") is readable rather than flashing past.
 const END_PAD_MS = 1000;
@@ -351,6 +351,9 @@ export function useUltronStore(): UltronStore {
         ...prev,
         [threadId]: [...(prev[threadId] ?? []), { role: 'ultron', text: 'Workflow saved', kind: 'workflow_saved' }],
       }));
+      // Flag the thread saved so the sidebar case row shows its trailing
+      // "workflow saved" mark, landing together with Ultron's confirmation.
+      markWorkflowSaved(threadId);
       setReplyingIds(prev => prev.filter(id => id !== threadId));
       delete replyTimers.current[threadId];
     }, REPLY_DELAY_MS);

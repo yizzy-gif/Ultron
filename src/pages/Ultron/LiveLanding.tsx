@@ -569,7 +569,9 @@ const EventLead = styled.div`
   min-width: 0;
 `;
 
-/* Leading 32px icon slot — a rounded chip holding the capability glyph. */
+/* Leading 32px icon slot — a rounded chip holding the capability glyph. Routine
+   and pending rows stay neutral; a risk-detected card tints the slot with the
+   orange scale to match its wash and Pulse mark. */
 const EventIcon = styled.span`
   display: inline-flex;
   align-items: center;
@@ -580,6 +582,11 @@ const EventIcon = styled.span`
   border-radius: var(--radius-md);
   background: var(--color-bg-tertiary);
   color: var(--color-slate-content-tertiary);
+
+  [data-outcome='risk'] & {
+    background: var(--Alloy-orange-150);
+    color: var(--color-orange-content-tertiary);
+  }
 `;
 
 /* The card's text column — capability eyebrow over the event title. */

@@ -110,9 +110,16 @@ function ActivitySession({ milestones, typingIndex, focusIndex, hideActions, run
                 : i < focusIndex - 1 ? 'done'       // the activity below this line is already complete
                 : i === focusIndex - 1 ? 'working'  // this line draws into the currently-working step
                 : 'upcoming';                        // at/below the working step — not yet reached
+            // Rows with a persistent sub-context line (a running/settled progress line)
+            // earn the generous inter-row gap so the heading + its sub-line read as one
+            // unit; a headline-only step (reasoning beats, collapsed accordions) has no
+            // sub-line, so it packs tighter against the next row. The connector below
+            // the row shortens to match.
+            const hasSecondary = !!m.progress?.length;
+            const isLast = i === milestones.length - 1;
             return (
-              <RowAnchor key={i}>
-                {i < milestones.length - 1 && <SessionConnector aria-hidden="true" $state={connectorState} />}
+              <RowAnchor key={i} $tight={!hasSecondary} $last={isLast}>
+                {!isLast && <SessionConnector aria-hidden="true" $state={connectorState} $tight={!hasSecondary} />}
                 <MilestoneContent
                   milestone={m}
                   last
@@ -166,7 +173,7 @@ export function RunningLabel() {
   const [phase, setPhase] = useState(0);
   useEffect(() => {
     if (phase >= RUN_PHASES.length - 1) return; // hold on the final beat
-    const t = setTimeout(() => setPhase(p => p + 1), 2200);
+    const t = setTimeout(() => setPhase(p => p + 1), 3200);
     return () => clearTimeout(t);
   }, [phase]);
   return (
@@ -350,11 +357,18 @@ function MilestoneContent({ milestone, last, typing, icon, collapsible = true, e
   // the supplemental line); always-on steps stay expanded.
   const [open, setOpen] = useState(!collapsible);
 
+  // Whether this step CAN toggle (has hidden content to reveal). This drives the
+  // element TYPE (button vs div) and stays stable across the step's lifecycle — it
+  // must NOT flip as the step settles, or the Header (and the icon nested in it)
+  // would re-mount, snapping the leading loader→check morph to its end state instead
+  // of animating. That re-mount was why only the last step (whose typing dropped
+  // before it settled) appeared to animate.
+  const canToggle = collapsible && (hasBlocks || hasExtra);
   // A collapsible step toggles its own supplemental sub-context via a trailing
-  // chevron (the prompt-card step accordion). While typing it's inert — the
-  // chevron only appears once the step has settled. It's expandable when it has
-  // hidden content to reveal: detail blocks, or the usage trigger itself.
-  const interactive = collapsible && !typing && (hasBlocks || hasExtra);
+  // chevron (the prompt-card step accordion). While typing it's inert — the chevron
+  // and click only activate once the step has settled (but the element stays a button
+  // throughout, per canToggle, so nothing re-mounts).
+  const interactive = canToggle && !typing;
   // Blocks reveal immediately (even while typing) so the secondary text can type
   // out in place rather than popping in after the headline.
   const showBlocks = hasBlocks && (collapsible ? open : true);
@@ -366,8 +380,8 @@ function MilestoneContent({ milestone, last, typing, icon, collapsible = true, e
   return (
     <Content $last={last}>
       <Header
-        as={interactive ? 'button' : 'div'}
-        type={interactive ? 'button' : undefined}
+        as={canToggle ? 'button' : 'div'}
+        type={canToggle ? 'button' : undefined}
         $interactive={interactive}
         aria-expanded={interactive ? open : undefined}
         onClick={interactive ? () => setOpen(o => !o) : undefined}
@@ -394,6 +408,8 @@ function MilestoneContent({ milestone, last, typing, icon, collapsible = true, e
           <MilestoneProgress
             steps={milestone.progress}
             avatars={milestone.avatars}
+            avatarsOnSettle={milestone.avatarsOnSettle}
+            reached={milestone.reached}
             live={!!(typing || focused)}
             /* The trailing matched-user avatars show while the step is running (as the
                people are reached) and whenever it's expanded. Once it settles and
@@ -436,7 +452,7 @@ function MilestoneContent({ milestone, last, typing, icon, collapsible = true, e
 /** How long each running progress beat holds before the next replaces it. Sized
  *  so a short count-up sequence ticks through roughly within a step's reveal
  *  cadence (ACTIVITY_STEP_MS) before it settles to the result. */
-const PROGRESS_BEAT_MS = 900;
+const PROGRESS_BEAT_MS = 1350;
 
 /** A step's running-progress line. While `live`, it advances through the beats —
  *  each new beat re-mounts (via key) so it pops in, replacing the previous one —
@@ -444,7 +460,7 @@ const PROGRESS_BEAT_MS = 900;
  *  result straight away. The terminal beat reads in the success tone (done),
  *  earlier beats in a muted "still working" tone. The matched-user avatars (when
  *  present) ride the trailing end of the row once the step settles. */
-function MilestoneProgress({ steps, avatars, live, showAvatars }: { steps: string[]; avatars?: string[]; live?: boolean; showAvatars?: boolean }) {
+function MilestoneProgress({ steps, avatars, avatarsOnSettle, reached, live, showAvatars }: { steps: string[]; avatars?: string[]; avatarsOnSettle?: boolean; reached?: number; live?: boolean; showAvatars?: boolean }) {
   const last = steps.length - 1;
   const [i, setI] = useState(live ? 0 : last);
 
@@ -467,14 +483,20 @@ function MilestoneProgress({ steps, avatars, live, showAvatars }: { steps: strin
   const done = i >= last;
   return (
     <ProgressRow>
-      <ProgressLine key={i} $done={done} $animate={!!live} aria-live="polite">
-        {steps[i]}
+      <ProgressLine key={i} $done={done} aria-live="polite">
+        {/* While live, each beat types itself out (no caret) as it lands, rather than
+            popping in whole — so the running status reads as being written in real
+            time. A settled/historical line shows its final text straight away. */}
+        {live ? <Typewriter text={steps[i]} caret={false} speed={26} /> : steps[i]}
       </ProgressLine>
       {/* Show the matched-user cluster whenever the step is running (`live`) — not
           just once its beats reach the settled result — so multi-beat steps (whose
           `done` lands after focus has moved on) still surface their avatar group
-          during the run. Settled steps show it on the final beat / when expanded. */}
-      {showAvatars && (done || live) && avatars?.length ? <AvatarStack seeds={avatars} /> : null}
+          during the run. Settled steps show it on the final beat / when expanded.
+          `avatarsOnSettle` opts out of the live reveal: the cluster waits for the
+          final beat (`done`), for faces that only become true at the end (e.g. a
+          confirmation that lands on the last progress line). */}
+      {showAvatars && (avatarsOnSettle ? done : (done || live)) && avatars?.length ? <AvatarStack seeds={avatars} total={reached} /> : null}
     </ProgressRow>
   );
 }
@@ -483,14 +505,21 @@ function MilestoneProgress({ steps, avatars, live, showAvatars }: { steps: strin
 const AVATAR_STAGGER_MS = 90;
 
 /** A compact overlapping cluster of the people a step reached. Shows up to five
- *  faces (leading face stacked on top); any beyond that collapse into a trailing
- *  "+N" count chip. The faces reveal one-by-one, left to right, each popping in a
- *  beat after the last so the group fills in as a flow. */
-function AvatarStack({ seeds, max = 5 }: { seeds: string[]; max?: number }) {
+ *  faces (leading face stacked on top); the remainder collapse into a trailing
+ *  "+N" count chip. The overflow is measured against `total` (the true number of
+ *  people reached) when it's larger than the faces provided — so a step that
+ *  messaged 20 RNs but only carries 5 face seeds still reads as "5 faces + 15",
+ *  summing to the full count. Without a `total`, the remainder is just the seeds
+ *  beyond the five shown. The faces reveal one-by-one, left to right, each popping
+ *  in a beat after the last so the group fills in as a flow. */
+function AvatarStack({ seeds, total, max = 5 }: { seeds: string[]; total?: number; max?: number }) {
   const shown = seeds.slice(0, max);
-  const extra = seeds.length - shown.length;
+  // Count everyone reached against `total` when it outstrips the seeds we have
+  // faces for; otherwise fall back to the seed count itself.
+  const reached = Math.max(total ?? 0, seeds.length);
+  const extra = reached - shown.length;
   return (
-    <StackRow aria-label={`${seeds.length} people reached`}>
+    <StackRow aria-label={`${reached} people reached`}>
       {shown.map((seed, i) => (
         <StackItem key={seed} style={{ zIndex: shown.length - i, animationDelay: `${i * AVATAR_STAGGER_MS}ms` }}>
           <Avatar size="sm" src={avatarUrl(seed)} name={seed} alt="" />
@@ -546,22 +575,24 @@ const SessionShell = styled.div<{ $animate?: boolean }>`
    as a whole, so the dots don't need their own sequential animation. */
 const Ellipsis = styled.span``;
 
-/* The activity stack — rendered directly (the group has no header). A generous gap
-   between rows (space-5) sits well above the tight heading→sub-context gap within a
-   row (space-1), so each activity reads as one unit — heading + its sub-line — with
-   clear separation from the next. */
+/* The activity stack — rendered directly (the group has no header). Row spacing is
+   set per-row (see RowAnchor) rather than by a uniform container gap: a row with a
+   sub-context line gets a generous gap (space-5) so its heading + sub-line read as
+   one unit, while a headline-only step packs tighter (space-3) against the next. */
 const SessionBody = styled.div`
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
   padding-top: var(--space-3);
 `;
 
-/* Wraps each step (positioning context for its connector). */
-const RowAnchor = styled.div`
+/* Wraps each step (positioning context for its connector). Carries the inter-row
+   gap as a bottom margin: tight (space-3) for a headline-only step, generous
+   (space-5) once the step shows a sub-context line. The last row drops it. */
+const RowAnchor = styled.div<{ $tight?: boolean; $last?: boolean }>`
   min-width: 0;
   position: relative;
+  margin-bottom: ${p => (p.$last ? '0' : p.$tight ? 'var(--space-3)' : 'var(--space-5)')};
 `;
 
 /* A bright segment sweeps top → bottom on a loop, reading as the connection being
@@ -571,29 +602,23 @@ const connectorDraw = keyframes`
   100% { background-position: 0 200%; }
 `;
 
-/* The solid green line draws itself on once — growing top → bottom from the
-   completed activity toward the next — as the segment settles to "done". */
-const connectorFill = keyframes`
-  from { background-size: 100% 0%; }
-  to   { background-size: 100% 100%; }
-`;
-
 /* Vertical line linking one session step's leading icon to the next, running down
    the icon column and bridging the inter-row gap. Inset top/bottom by space-1 for
    breathing room. Its look tracks the work:
-   · done     — a solid, full green (success) line that draws itself on top→bottom
-                as the activity below it completes.
+   · done     — a solid, full green (success) line, static (the draw motion lived
+                in the 'working' state; on completion the line just solidifies).
    · working  — a green (success) segment drawing top→bottom on a loop over a faint
                 track, so the link reads as being drawn into the working activity.
    · upcoming — a faint dashed track (not yet reached). */
-const SessionConnector = styled.span<{ $state?: 'done' | 'working' | 'upcoming' }>`
+const SessionConnector = styled.span<{ $state?: 'done' | 'working' | 'upcoming'; $tight?: boolean }>`
   position: absolute;
   /* Centered on the 32px icon column. */
   left: calc(var(--space-8) / 2);
   top: calc(var(--space-8) + var(--space-1));
-  /* Extend down across the wider inter-row gap (space-5), stopping a touch short of
-     the next step's icon so it reads as connecting the two. */
-  bottom: calc(var(--space-1) - var(--space-5));
+  /* Extend down across the inter-row gap — matched to this row's own gap (tight vs
+     generous) — stopping a touch short of the next step's icon so it reads as
+     connecting the two. */
+  bottom: ${p => (p.$tight ? 'calc(var(--space-1) - var(--space-3))' : 'calc(var(--space-1) - var(--space-5))')};
   pointer-events: none;
 
   ${p => p.$state === 'working'
@@ -617,17 +642,14 @@ const SessionConnector = styled.span<{ $state?: 'done' | 'working' | 'upcoming' 
         border-left: 1.5px dashed var(--color-border-opaque);
       `
     : css`
-        /* done — a full green line that draws on top→bottom (growing from the
-           activity above toward the one below) as the lower step completes. */
+        /* done — a full, solid green line. Static: the drawing motion belongs to
+           the 'working' state (the looping sweep). Once the step completes, the
+           line simply solidifies rather than re-drawing from zero. Animating a
+           draw-on here replayed the fill every time a connector flipped
+           working→done (or re-mounted as the group settled), which read as the
+           line collapsing and redrawing after the checkmark morph — unstable. */
         width: 1.5px;
-        background-image: linear-gradient(
-          var(--color-success-content),
-          var(--color-success-content)
-        );
-        background-repeat: no-repeat;
-        background-position: top center;
-        background-size: 100% 100%;
-        animation: ${connectorFill} 0.45s var(--ease-out) both;
+        background-color: var(--color-success-content);
       `};
 
   @media (prefers-reduced-motion: reduce) { animation: none; }
@@ -693,7 +715,7 @@ const RateButton = styled(Button)`
 /* Types a string out character-by-character with a blinking caret. The full
    text is always laid out (the un-typed tail is rendered transparent) so the
    line never re-wraps as it fills in — the reveal stays smooth and jump-free. */
-export function Typewriter({ text, onDone, speed = 30 }: { text: string; onDone?: () => void; speed?: number }) {
+export function Typewriter({ text, onDone, speed = 30, caret = true }: { text: string; onDone?: () => void; speed?: number; caret?: boolean }) {
   const [n, setN] = useState(0);
   useEffect(() => { setN(0); }, [text]);
   useEffect(() => {
@@ -706,7 +728,9 @@ export function Typewriter({ text, onDone, speed = 30 }: { text: string; onDone?
   return (
     <>
       {text.slice(0, n)}
-      <Caret $blink={done} aria-hidden="true" />
+      {/* `caret={false}` types the text out with no blinking indicator — used by the
+         running-progress line, which wants the type-on reveal without a cursor. */}
+      {caret && <Caret $blink={done} aria-hidden="true" />}
       {!done && <Pending aria-hidden="true">{text.slice(n)}</Pending>}
     </>
   );
@@ -812,25 +836,30 @@ const StatusMark = styled.svg<{ $loading?: boolean }>`
   overflow: visible;
 
   .ring {
-    fill: none;
+    /* Loading: hollow (transparent) spinner arc. Done: the circle fills solid
+       success green — a filled badge, not an outline. Transparent (not none) so
+       the fill eases in rather than popping. */
+    fill: ${p => (p.$loading ? 'transparent' : 'var(--color-success-fill)')};
     stroke-width: 2;
     stroke-linecap: round;
     stroke-dasharray: ${RING_C};
     transform-origin: center;
     /* loading: leave ~30% of the circle drawn as the spinner arc */
     stroke-dashoffset: ${p => (p.$loading ? RING_C * 0.7 : 0)};
-    stroke: ${p => (p.$loading ? 'var(--color-content-tertiary)' : 'var(--color-success-content)')};
+    stroke: ${p => (p.$loading ? 'var(--color-content-tertiary)' : 'var(--color-success-fill)')};
     animation: ${spin} 0.75s linear infinite;
-    /* Arc closes + warms on one eased settle curve (easeOutCubic) over the same
-       duration, so the ring glides shut rather than braking abruptly. */
+    /* Arc closes + fills on one eased settle curve (easeOutCubic) over the same
+       duration, so the ring glides shut and colours in rather than braking abruptly. */
     transition:
       stroke-dashoffset 0.55s cubic-bezier(0.33, 1, 0.68, 1),
-      stroke 0.55s cubic-bezier(0.33, 1, 0.68, 1);
+      stroke 0.55s cubic-bezier(0.33, 1, 0.68, 1),
+      fill 0.55s cubic-bezier(0.33, 1, 0.68, 1);
   }
 
   .check {
     fill: none;
-    stroke: var(--color-success-content);
+    /* White check on the filled green disc. */
+    stroke: var(--color-content-inverse-primary);
     stroke-width: 2;
     stroke-linecap: round;
     stroke-linejoin: round;
@@ -916,16 +945,7 @@ const Chevron = styled.span`
    title (clears the inline icon column like Blocks) when the icon rides inline;
    in the connected trail the row is already offset so no indent is needed. */
 const ProgressWrap = styled.div<{ $indent?: boolean }>`
-  padding-top: var(--space-1);
   padding-left: ${p => (p.$indent ? 'calc(var(--space-8) + var(--space-3))' : '0')};
-`;
-
-/* Each progress beat pops in as it replaces the last — a fade paired with a small
-   upward rise, so every status update reads as a fresh line landing while the step
-   runs. Kept subtle and eased so it lands cleanly rather than trembling. */
-const progressPop = keyframes`
-  from { opacity: 0; transform: translateY(var(--space-1)); }
-  to   { opacity: 1; transform: translateY(0); }
 `;
 
 /* Holds the status line and the trailing matched-user avatar group on one row —
@@ -938,7 +958,7 @@ const ProgressRow = styled.div`
 
 /* The status line itself — Alloy paragraph / medium, in the muted content-tertiary
    tone for both the in-flight beats and the settled result. */
-const ProgressLine = styled.div<{ $done?: boolean; $animate?: boolean }>`
+const ProgressLine = styled.div<{ $done?: boolean }>`
   flex: 1;
   min-width: 0;
   font-family: var(--font-sans);
@@ -949,12 +969,9 @@ const ProgressLine = styled.div<{ $done?: boolean; $animate?: boolean }>`
   /* Settled (done) sub-text reads in the success green — matching the completed
      step's check — while in-flight beats stay muted. */
   color: ${p => (p.$done ? 'var(--color-success-content)' : 'var(--color-content-tertiary)')};
-  /* Only crossfade while the step is live (a beat ticking in). A settled line that
-     re-mounts — e.g. when the finished group folds into a response set — must NOT
-     replay the pop, or it reads as a stray flash after the activities have settled. */
-  animation: ${p => (p.$animate ? css`${progressPop} var(--duration-slow) var(--ease-out)` : 'none')};
-
-  @media (prefers-reduced-motion: reduce) { animation: none; }
+  /* The live reveal is carried by the type-on (see MilestoneProgress → Typewriter),
+     so the line itself no longer fades/pops in — that avoided a stray flash when a
+     settled line re-mounts (e.g. as the finished group folds into a response set). */
 `;
 
 /* Trailing overlapping avatar cluster — the matched people the step reached. The
@@ -995,11 +1012,14 @@ const StackMore = styled.span`
   justify-content: center;
   height: var(--space-6);
   min-width: var(--space-6);
-  padding: 0 var(--space-1);
+  /* Asymmetric padding: a wide left pad (12px, exceeding the 8px overlap) keeps the
+     leading "+" clear of the face beside it, with a tighter right pad so the chip
+     stays compact. */
+  padding: 0 var(--space-2) 0 var(--space-3);
   margin-left: calc(-1 * var(--space-2));
   border-radius: var(--radius-full);
   box-shadow: 0 0 0 2px var(--color-bg-primary);
-  background: var(--color-slate-bg-secondary);
+  background: var(--color-bg-tertiary);
   font-size: var(--text-xs);
   font-weight: var(--font-weight-medium);
   color: var(--color-content-secondary);

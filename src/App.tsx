@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import styled from 'styled-components';
+import styled, { keyframes } from 'styled-components';
 import { AppShell } from './components/AppShell';
 import type { PrimaryNavItem, SecondaryNavMenuEntry, SecondaryNavPageEntry } from './types/nav';
 import {
@@ -72,6 +72,76 @@ const UltronNavCard = styled.button<{ $active: boolean }>`
   transition: background var(--duration-fast, 120ms) var(--ease-out, ease);
 
   &:hover { background: var(--color-bg-secondary, rgba(70, 108, 255, 0.06)); }
+`;
+
+/* The glyph springs in when the play is saved: the interlocking rings whirl
+   into place with an overshoot, so the moment the workflow lands is unmistakable
+   from the list. Plays once, as the mark mounts. */
+const savedPop = keyframes`
+  0%   { opacity: 0; transform: scale(0.2) rotate(-140deg); }
+  50%  { opacity: 1; transform: scale(1.45) rotate(12deg); }
+  68%  { transform: scale(0.86) rotate(-8deg); }
+  84%  { transform: scale(1.12) rotate(3deg); }
+  100% { transform: scale(1)   rotate(0deg); }
+`;
+
+/* The glyph flashes success-green as it lands, then settles to its quiet muted
+   tone — a highlight beat that draws the eye to the newly-saved row. */
+const savedGlow = keyframes`
+  0%, 55% { color: var(--color-success-content); }
+  100%    { color: var(--color-content-tertiary); }
+`;
+
+/* A green halo ripples outward from behind the glyph as it pops, then fades —
+   the extra "landing" flourish that makes the save obvious at a glance. */
+const savedRipple = keyframes`
+  0%   { opacity: 0.45; transform: scale(0.4); }
+  100% { opacity: 0;    transform: scale(2.4); }
+`;
+
+/* Trailing marker on a case row whose play has been saved as a workflow — a
+   muted automation glyph at rest, but it makes an obvious entrance (spring pop +
+   green flash + radiating halo) the moment it appears, so saving the play is
+   plainly noticeable in the list. */
+const SavedWorkflowMark = styled.span`
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--space-8);
+  height: var(--space-8);
+  color: var(--color-content-tertiary);
+
+  & svg {
+    width: 16px;
+    height: 16px;
+    transform-origin: center;
+    /* Spring the rings in while flashing green then settling muted; the "both"
+       fill holds the muted end colour once the flash finishes. */
+    animation:
+      ${savedPop} 640ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+      ${savedGlow} 1100ms var(--ease-out, ease-out) both;
+  }
+
+  /* Radiating halo behind the glyph — the ripple that lands with the pop. */
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: var(--space-6);
+    height: var(--space-6);
+    border-radius: var(--radius-full);
+    background: var(--color-success-content);
+    pointer-events: none;
+    animation: ${savedRipple} 720ms var(--ease-out, ease-out) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    & svg,
+    &::after { animation: none; }
+  }
 `;
 
 // Group icons for the Ultron secondary-nav groups (Needs attention / Live
@@ -207,6 +277,12 @@ export default function App() {
                 : <AgentMark mark="pulse" size={32} tone="auto" state={t.status === 'unresolved' ? 'idle' : 'static'} color={t.status === 'unresolved' ? 'var(--color-orange-content-tertiary)' : ultron.viewedIds.includes(t.id) ? 'var(--color-slate-content-tertiary)' : 'var(--color-green-content-tertiary)'} aria-label="Done" />,
               isActive: homeView === 'ultron' && !onLive && homeSection === childSection && ultron.selectedId === t.id,
               onClick: () => { setHomeView('ultron'); setOnLive(false); ultron.setSelectedId(t.id); },
+              // Once the operator saves this case's play as a reusable workflow, the
+              // row carries a trailing automation glyph so the saved state is legible
+              // from the list without opening the case.
+              trailingSlot: ultron.savedWorkflowIds.includes(t.id)
+                ? <SavedWorkflowMark aria-label="Saved as workflow" title="Saved as workflow"><AutomationIcon /></SavedWorkflowMark>
+                : undefined,
             })),
           },
         };

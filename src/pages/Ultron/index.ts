@@ -1,5 +1,6 @@
 export { UltronPage } from './UltronPage';
 export type { UltronSection } from './UltronPage';
+export { caseLabel } from './caseLabels';
 export { UltronIdentityCard } from './UltronIdentityCard';
 export { AgentMark } from './AgentMark';
 export { TypingText } from './TypingText';

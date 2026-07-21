@@ -16,11 +16,12 @@ import policyActiveUrl from './assets/policy-icon-active.svg';
 import automationActiveUrl from './assets/automation-icon-active.svg';
 import {
   UltronPage, MemoryPage, AccountDatabasePage, useUltronStore, ACCOUNT_COLLECTIONS, AgentMark,
-  UltronIdentityCard, TypingText,
+  UltronIdentityCard, TypingText, caseLabel,
   type UltronSection, type ThreadStatus,
 } from './pages/Ultron';
 import { useHashSync } from './nav/hashSync';
 import type { MobileModuleGroup } from './components/AppShell/MobileShell';
+import { ThemeToggle } from './components/ThemeToggle';
 
 // ── Nav item definitions ──────────────────────────────────────────────────
 // The full primary rail is kept for chrome fidelity, but Ultron is the only
@@ -149,7 +150,7 @@ const SavedWorkflowMark = styled.span`
 // stream / Resolved), keyed by the store group id.
 const HOME_GROUP_ICON: Record<string, React.ReactNode> = {
   needs_attention: <AlertTriangleIcon size={16} />,
-  live:            <AgentMark mark="lines" size={32} tone="auto" state="active" />,
+  live:            <AgentMark mark="orbit2d" size={32} tone="auto" state="active" />,
   resolved:        <CheckCircleIcon size={16} />,
 };
 
@@ -247,23 +248,33 @@ export default function App() {
         // New group relabels the needs-attention bucket.
         const childSection: UltronSection =
           g.id === 'needs_attention' ? 'new' : g.id === 'resolved' ? 'done' : 'working';
+        // The New group only lists cases that have animated in on the top-level
+        // deck (see revealedNewIds) — so it fills one-by-one in lockstep with the
+        // deck reveal rather than showing the whole backlog up front. Still-
+        // analyzing cases (no deck card) always show. The deck itself caps the
+        // reveal at its top 5, so no extra slice is needed here.
+        const groupThreads = g.id === 'needs_attention'
+          ? g.threads.filter(t => t.status === 'analyzing' || ultron.revealedNewIds.includes(t.id))
+          : g.threads;
         const groupEntry = {
           type: 'group' as const,
           group: {
             id: g.id,
             label: g.id === 'needs_attention' ? 'New' : g.label,
             icon: HOME_GROUP_ICON[g.id],
-            trailingBadge: <Badge>{g.threads.length}</Badge>,
+            trailingBadge: <Badge>{groupThreads.length}</Badge>,
             defaultExpanded: true,
             outlined: false,
-            // New can get long — show the first 5, collapse the rest behind
-            // a "Show N more" row (covers needs-attention + analyzing alike).
-            maxVisible: g.id === 'needs_attention' ? 5 : undefined,
-            children: g.threads.map(t => ({
+            children: groupThreads.map(t => ({
               id: t.id,
               // Cases Ultron just detected on the Live landing type their title
               // in (the moment of detection); authored cases show it plainly.
-              label: t.id.startsWith('detected_') ? <TypingText text={t.name} /> : t.name,
+              // The label is action-oriented and phrased for the case's current
+              // lifecycle group (New → the ask, Working → in-progress, Done →
+              // completed); see caseLabels.ts.
+              label: t.id.startsWith('detected_')
+                ? <TypingText text={caseLabel(t.name, childSection)} />
+                : caseLabel(t.name, childSection),
               // Needs-attention cases carry an orange Pulse mark — a breathing
               // core that flags the case for the user — except while Ultron is
               // still analyzing, which keeps the orbiting mark. Working cases
@@ -274,7 +285,7 @@ export default function App() {
                     ? <AgentMark mark="orbit2d" size={32} tone="auto" state="active" aria-label="Analyzing" />
                     : <AgentMark mark="pulse" size={32} tone="auto" state="active" color="var(--color-orange-content-tertiary)" aria-label="Needs attention" />)
                 : childSection === 'working'
-                ? <AgentMark mark="lines" size={32} tone="auto" state={t.status === 'in_progress' ? 'active' : 'idle'} aria-label="Working" />
+                ? <AgentMark mark="orbit2d" size={32} tone="auto" state={t.status === 'in_progress' ? 'active' : 'idle'} aria-label="Working" />
                 : <AgentMark mark="pulse" size={32} tone="auto" state={t.status === 'unresolved' ? 'idle' : 'static'} color={t.status === 'unresolved' ? 'var(--color-orange-content-tertiary)' : ultron.viewedIds.includes(t.id) ? 'var(--color-slate-content-tertiary)' : 'var(--color-green-content-tertiary)'} aria-label="Done" />,
               isActive: homeView === 'ultron' && !onLive && homeSection === childSection && ultron.selectedId === t.id,
               onClick: () => { setHomeView('ultron'); setOnLive(false); ultron.setSelectedId(t.id); },
@@ -308,6 +319,8 @@ export default function App() {
   ];
 
   return (
+    <>
+    <ThemeToggle />
     <AppShell
       // PrimaryNav
       items={withActive(PRIMARY_ITEMS)}
@@ -383,8 +396,10 @@ export default function App() {
           onStop={ultron.stopReply}
           onClose={() => { setHomeView('ultron'); setOnLive(true); }}
           onDetectRisk={ultron.detectRisk}
+          onRevealNew={ultron.revealNew}
         />
       )}
     </AppShell>
+    </>
   );
 }

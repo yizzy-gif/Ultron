@@ -9,17 +9,21 @@ A standalone prototype of **Ultron** — a workforce-operations AI agent surface
 - **Full app chrome** — `AppShell` with `PrimaryNav` / `SecondaryNav` / `TopNav` and a responsive mobile sheet layout.
 - **Ultron is the app** — Ultron is the only wired primary-nav module (its icon is the Circle agent mark, and it's the default view). The other rail items render for visual fidelity but are inert.
 - **The case feed** — cases grouped by lifecycle in the sidebar (New → Working → Done), each with an identity card, a docked decision surface (Approve / Other), and an **accumulating activity trail** that appends new reasoning/working steps under the existing ones as Ultron acts (it never clears and re-grows).
-- **Design system** — built on the local [Alloy](../Alloy) design system (`alloy-design-system`), styled-components, and Geist.
+- **Design system** — built on the [Alloy](https://github.com/yizzy-gif/alloy-design-system) design system (`alloy-design-system`), styled-components, and Geist.
 
 ## Getting started
 
-This project depends on the local Alloy design system via a `file:` path:
+This project depends on the [Alloy design system](https://github.com/yizzy-gif/alloy-design-system), consumed locally via a `file:` path:
 
 ```jsonc
-"alloy-design-system": "file:/Users/unassignedlaptop9/Documents/MyClaudeFolder/Alloy"
+"alloy-design-system": "file:../alloy-design-system"
 ```
 
-So a fresh clone needs Alloy checked out at that path (or the dependency repointed) before installing.
+So a fresh clone needs Alloy checked out as a sibling directory (or the dependency repointed) before installing:
+
+```bash
+git clone https://github.com/yizzy-gif/alloy-design-system.git
+```
 
 ```bash
 npm install
